@@ -20,6 +20,12 @@ build/
 dist/
 *.egg-info/
 
+# typescript-sdk/.gitignore
+node_modules/
+dist/
+.DS_Store
+*.log
+
 # Editors
 .vscode/
 .idea/
