@@ -263,6 +263,7 @@ sdk/
   typescript-sdk/
     src/
     dist/
+    bin/
 ```
 
 Typical flow:
