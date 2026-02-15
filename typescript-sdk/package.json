@@ -29,8 +29,9 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "prepack": "npm run build",
     "test:cli-smoke": "node scripts/cli-smoke.mjs",
-    "test:unit": "node scripts/unit-tests.mjs",
-    "test": "npm run test:unit && npm run test:cli-smoke"
+    "test:unit": "npm run build && node scripts/unit-tests.mjs && npm run test:template",
+    "test": "npm run test:unit && npm run test:cli-smoke",
+    "test:template": "node scripts/template-tests.mjs"
   },
   "dependencies": {
     "commander": "^12.1.0",
