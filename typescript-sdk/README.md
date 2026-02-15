@@ -127,21 +127,21 @@ console.log(result.ok);
 
 **Option B — ENS-based Verification**
 
-Resolves the public key from ENS TXT records.
+Resolves signer metadata from ENS TXT records.
 
 Required ENS records:
 
-- `cl.receipt.pubkey_pem`
-- `cl.receipt.signer_id`
-- `cl.receipt.alg`
-- 
+- Agent ENS TXT: `cl.receipt.signer`
+- Signer ENS TXT: `cl.sig.pub`
+- Signer ENS TXT: `cl.sig.kid`
+
 Example:
 ```
 import { verifyReceipt } from "@commandlayer/sdk";
 
 const out = await verifyReceipt(receipt, {
   ens: {
-    name: "runtime.commandlayer.eth",
+    name: "summarizeagent.eth",
     rpcUrl: process.env.ETH_RPC_URL!
   }
 });
