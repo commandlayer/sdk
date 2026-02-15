@@ -5,26 +5,26 @@ import { ethers } from "ethers";
 /**
  * CommandLayer TypeScript SDK — Commons v1.0.0
  *
- * What this implements (for real):
- * - canonicalization: cl-stable-json-v1
- * - hash recomputation: sha256 over unsigned receipt canonical JSON
- * - signature verification: Ed25519 over the hash string (UTF-8)
- * - ENS pubkey resolution: TXT record lookup via ethers v6
+ * Implements:
+ * - Canonicalization: cl-stable-json-v1 (stable JSON stringify w/ sorted keys)
+ * - Hash recomputation: sha256 over unsigned receipt canonical JSON
+ * - Signature verification: Ed25519 over the HASH STRING (utf8)
+ * - ENS pubkey resolution: TXT lookup via ethers v6
  *
- * Notes:
- * - This SDK targets Node (uses node:crypto). If you want browser support,
- *   we can switch to @noble/ed25519 + @noble/hashes and conditional exports.
+ * Node-only (uses node:crypto). For browser support, swap to noble libs + conditional exports.
  */
 
 export const version = "1.0.0";
 
+// -----------------------
+// Types
+// -----------------------
 export type Proof = {
   alg?: string; // "ed25519-sha256"
   canonical?: string; // "cl-stable-json-v1"
   signer_id?: string; // e.g. runtime.commandlayer.eth
   hash_sha256?: string; // hex
   signature_b64?: string; // base64
-  // allow forward-compat fields
   [k: string]: any;
 };
 
@@ -65,7 +65,7 @@ export type Receipt<T = any> = {
 };
 
 export type VerifyChecks = {
-  schema_valid?: boolean; // (not implemented here)
+  schema_valid?: boolean; // not implemented in SDK (runtime /verify can do this)
   hash_matches: boolean;
   signature_valid: boolean;
 };
@@ -106,8 +106,6 @@ export type EnsVerifyOptions = {
   rpcUrl: string;
   /** TXT record key that contains a PEM public key (default: cl.receipt.pubkey_pem) */
   pubkeyTextKey?: string;
-  /** If true, always refetch from RPC (no caching). Default false. */
-  refresh?: boolean;
 };
 
 export type VerifyOptions = {
@@ -119,18 +117,21 @@ export type VerifyOptions = {
 
 export type ClientOptions = {
   runtime?: string; // default https://runtime.commandlayer.org
-  actor?: string; // required-ish for classify; good everywhere
+  actor?: string; // used by classify + helpful elsewhere
   timeoutMs?: number;
   fetchImpl?: typeof fetch;
 
   /**
-   * If true, every client call verifies receipt integrity.
-   * - Requires either `publicKeyPem` OR `ens` options.
-   * - If neither is provided, we still recompute hash (integrity) but cannot verify signature.
+   * If true, every client call verifies the returned receipt.
+   * Requires either:
+   *  - opts.verify.publicKeyPem, OR
+   *  - opts.verify.ens (with rpcUrl)
+   *
+   * If you enable verifyReceipts without keys, calls will throw.
    */
   verifyReceipts?: boolean;
 
-  /** Optional default verification config */
+  /** Default verification config used when verifyReceipts is enabled */
   verify?: VerifyOptions;
 };
 
@@ -149,6 +150,9 @@ const VERBS = [
 
 type Verb = (typeof VERBS)[number];
 
+// -----------------------
+// Helpers
+// -----------------------
 function normalizeBase(url: string) {
   return String(url || "").replace(/\/+$/, "");
 }
@@ -183,14 +187,9 @@ function normalizePem(text: string | null | undefined): string | null {
 }
 
 function verifyEd25519OverHashString(hashHex: string, signatureB64: string, publicKeyPem: string): boolean {
-  // IMPORTANT: your runtime signs Buffer.from(hash, 'utf8') where hash is the hex string.
+  // Runtime signs Buffer.from(hashHex, 'utf8') where hashHex is the hex string.
   const key = crypto.createPublicKey(publicKeyPem);
-  return crypto.verify(
-    null,
-    Buffer.from(hashHex, "utf8"),
-    key,
-    Buffer.from(signatureB64, "base64")
-  );
+  return crypto.verify(null, Buffer.from(hashHex, "utf8"), key, Buffer.from(signatureB64, "base64"));
 }
 
 async function resolveEnsPubkeyPem(
@@ -212,6 +211,9 @@ async function resolveEnsPubkeyPem(
   }
 }
 
+// -----------------------
+// Receipt verification
+// -----------------------
 /**
  * Verify a receipt:
  * - recompute canonical hash over "unsigned receipt"
@@ -224,9 +226,9 @@ export async function verifyReceipt(receipt: Receipt, opts: VerifyOptions = {}):
   const claimedHash = proof?.hash_sha256 ? String(proof.hash_sha256) : null;
   const sigB64 = proof?.signature_b64 ? String(proof.signature_b64) : null;
 
+  // Build "unsigned" receipt exactly like runtime: blank proof hash/sig + receipt_id
   const unsigned = structuredClone(receipt) as any;
 
-  // blank out proof + receipt_id exactly like your runtime does
   if (unsigned?.metadata?.proof) {
     unsigned.metadata.proof.hash_sha256 = "";
     unsigned.metadata.proof.signature_b64 = "";
@@ -286,6 +288,9 @@ export async function verifyReceipt(receipt: Receipt, opts: VerifyOptions = {}):
   };
 }
 
+// -----------------------
+// Client
+// -----------------------
 export class CommandLayerClient {
   runtime: string;
   actor: string;
@@ -299,8 +304,22 @@ export class CommandLayerClient {
     this.actor = opts.actor || "sdk-user";
     this.timeoutMs = opts.timeoutMs ?? 30_000;
     this.fetchImpl = opts.fetchImpl || fetch;
+
     this.verifyReceipts = opts.verifyReceipts !== false;
     this.verifyDefaults = opts.verify;
+  }
+
+  private ensureVerifyConfigIfEnabled() {
+    if (!this.verifyReceipts) return;
+    const v = this.verifyDefaults;
+    const hasExplicit = !!(v?.publicKeyPem && normalizePem(v.publicKeyPem));
+    const hasEns = !!(v?.ens?.name && v?.ens?.rpcUrl);
+    if (!hasExplicit && !hasEns) {
+      throw new CommandLayerError(
+        "verifyReceipts is enabled but no verification key config provided. Set client options: verify.publicKeyPem OR verify.ens { name, rpcUrl }.",
+        400
+      );
+    }
   }
 
   // ---- verb helpers (match your runtime handlers)
@@ -326,8 +345,9 @@ export class CommandLayerClient {
   }
 
   async classify(opts: { content: string; maxLabels?: number; maxTokens?: number }) {
+    // classify requires actor per your runtime
     return this.call("classify", {
-      actor: this.actor, // classify requires actor in your runtime
+      actor: this.actor,
       input: { content: opts.content },
       limits: {
         max_labels: opts.maxLabels ?? 5,
@@ -338,7 +358,10 @@ export class CommandLayerClient {
 
   async clean(opts: { content: string; operations?: string[]; maxTokens?: number }) {
     return this.call("clean", {
-      input: { content: opts.content, operations: opts.operations ?? ["trim", "normalize_newlines"] },
+      input: {
+        content: opts.content,
+        operations: opts.operations ?? ["normalize_newlines", "collapse_whitespace", "trim"],
+      },
       limits: { max_output_tokens: opts.maxTokens ?? 1000 },
     });
   }
@@ -350,29 +373,36 @@ export class CommandLayerClient {
     });
   }
 
-  async describe(opts: { subject: string; context?: string; detail?: "short" | "medium" | "detailed"; maxTokens?: number }) {
+  async describe(opts: {
+    subject: string;
+    audience?: string;
+    detail?: "short" | "medium" | "detailed";
+    maxTokens?: number;
+  }) {
     const subject = (opts.subject || "").slice(0, 140);
-    const context = (opts.context ?? opts.subject ?? "").toString();
     return this.call("describe", {
       input: {
         subject,
-        context,
+        audience: opts.audience ?? "general",
         detail_level: opts.detail ?? "medium",
-        audience: "general",
       },
       limits: { max_output_tokens: opts.maxTokens ?? 1000 },
     });
   }
 
-  async explain(opts: { subject: string; context?: string; style?: string; detail?: string; maxTokens?: number }) {
+  async explain(opts: {
+    subject: string;
+    audience?: string;
+    style?: string;
+    detail?: "short" | "medium" | "detailed";
+    maxTokens?: number;
+  }) {
     const subject = (opts.subject || "").slice(0, 140);
-    const context = (opts.context ?? opts.subject ?? "").toString();
     return this.call("explain", {
       input: {
         subject,
-        context,
+        audience: opts.audience ?? "general",
         style: opts.style ?? "step-by-step",
-        audience: "general",
         detail_level: opts.detail ?? "medium",
       },
       limits: { max_output_tokens: opts.maxTokens ?? 1000 },
@@ -387,7 +417,13 @@ export class CommandLayerClient {
     });
   }
 
-  async parse(opts: { content: string; contentType?: "json" | "yaml" | "text"; mode?: "best_effort" | "strict"; targetSchema?: string; maxTokens?: number }) {
+  async parse(opts: {
+    content: string;
+    contentType?: "json" | "yaml" | "text";
+    mode?: "best_effort" | "strict";
+    targetSchema?: string;
+    maxTokens?: number;
+  }) {
     return this.call("parse", {
       input: {
         content: opts.content,
@@ -399,29 +435,33 @@ export class CommandLayerClient {
     });
   }
 
-  async fetch(opts: { source: string; maxTokens?: number }) {
-    // Your runtime reads body.source OR input.source.
+  async fetch(opts: { source: string; query?: string; include_metadata?: boolean; maxTokens?: number }) {
+    // Your runtime reads body.source OR input.source OR input.url; it uses query/include_metadata optionally.
     return this.call("fetch", {
-      input: { source: opts.source },
+      input: {
+        source: opts.source,
+        ...(opts.query !== undefined ? { query: opts.query } : {}),
+        ...(opts.include_metadata !== undefined ? { include_metadata: opts.include_metadata } : {}),
+      },
       limits: { max_output_tokens: opts.maxTokens ?? 1000 },
     });
   }
 
-  // ---- raw call (keeps you aligned with runtime contract)
-  async call(
-    verb: Verb,
-    body: Record<string, any>
-  ): Promise<Receipt> {
+  // ---- raw call (aligned to your runtime)
+  async call(verb: Verb, body: Record<string, any>): Promise<Receipt> {
     const url = `${this.runtime}/${verb}/v1.0.0`;
 
-    // Keep x402 minimal and consistent; runtime will echo/accept it.
+    // Ensure verification is configured before we make calls (if enabled)
+    this.ensureVerifyConfigIfEnabled();
+
+    // Runtime accepts either `req.body.x402` or default. We'll send minimal x402.
     const payload = {
       x402: {
         verb,
         version: "1.0.0",
         entry: `x402://${verb}agent.eth/${verb}/v1.0.0`,
       },
-      // actor is used by classify + helpful elsewhere
+      // actor used by runtime classify + may be stored in receipt.metadata.actor
       ...(body.actor ? { actor: body.actor } : { actor: this.actor }),
       ...body,
     };
@@ -443,14 +483,9 @@ export class CommandLayerClient {
       const data = await resp.json().catch(() => ({}));
 
       if (!resp.ok) {
-        throw new CommandLayerError(
-          data?.message || data?.error?.message || `HTTP ${resp.status}`,
-          resp.status,
-          data
-        );
+        throw new CommandLayerError(data?.message || data?.error?.message || `HTTP ${resp.status}`, resp.status, data);
       }
 
-      // Optional automatic verification
       if (this.verifyReceipts) {
         const v = await verifyReceipt(data as Receipt, this.verifyDefaults || {});
         if (!v.ok) {
