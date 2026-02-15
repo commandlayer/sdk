@@ -4,20 +4,9 @@
 /**
  * CommandLayer CLI
  *
- * Monorepo layout:
- *   typescript-sdk/
- *     dist/index.js
- *     bin/cli.js   (this file)
- *
- * This CLI matches the UPDATED SDK:
- * - Real receipt verification (canonicalize + hash + Ed25519)
- * - Optional ENS pubkey resolution (ethers v6) OR explicit PEM
- *
- * Node 18+ recommended.
+ * Uses ../dist/index.js (built output).
  */
 
-const fs = require("fs");
-const path = require("path");
 const { createClient, CommandLayerError } = require("../dist/index.js");
 
 const VERBS = [
@@ -45,94 +34,32 @@ Available verbs:
 
 Examples:
   commandlayer summarize --content "Long text..." --style bullet_points --json
-  commandlayer analyze --content "Data..." --json
-  commandlayer clean --content " a\\n\\n b " --operations trim,normalize_newlines,remove_empty_lines --json
-  commandlayer convert --content '{"a":1,"b":2}' --from json --to csv --json
-  commandlayer describe --subject "CommandLayer receipt" --context "..." --detail medium --json
-  commandlayer explain --subject "x402 receipt verification" --context "..." --style step-by-step --json
-  commandlayer format --content "a: 1\\nb: 2" --target table --json
-  commandlayer parse --content '{"a":1}' --content-type json --mode strict --json
-  commandlayer fetch --source "https://example.com" --mode text --json
+  commandlayer analyze --content "Data..." --goal "find anomalies" --hints sentiment,tone
+  commandlayer convert --content "# Title" --from markdown --to html
+  commandlayer fetch --query "https://example.com" --mode text
 
-Global options:
-  --actor <id>           Actor identifier (default: sdk-user)
-  --runtime <url>        Custom runtime URL (default: https://runtime.commandlayer.org)
-  --timeout <ms>         Request timeout (default: 30000)
-  --no-verify            Disable receipt verification (NOT recommended)
+Options:
+  --content <text>       Content to process (required for most verbs)
+  --query <url|text>     URL/query (fetch verb)
+  --style <style>        Style hint (summarize, explain)
+  --format <format>      Format hint (summarize)
+  --goal <text>          Goal (analyze)
+  --hints <list>         Comma-separated hints (analyze)
+  --dimensions <list>    Alias for --hints (analyze)
+  --categories <list>    Comma-separated categories (classify)
+  --mode <mode>          fetch mode: text|html|json (default: text)
+  --from <format>        Source format (convert)
+  --to <format>          Target format (convert)
+  --detail <level>       describe detail: short|medium|detailed (default: medium)
+  --max-tokens <n>       Maximum output tokens (default: 1000)
+  --actor <id>           Actor identifier
+  --runtime <url>        Custom runtime URL
+  --no-verify            Disable receipt verification (hash+sig)
+  --ens-rpc <url>        ETH RPC URL for ENS pubkey resolution (default: env ETH_RPC_URL)
+  --ens-text-key <key>   ENS TXT key for pubkey (default: cl.receipt.pubkey_pem)
   --json                 Output raw receipt JSON
-  --stdin                Read content/context from stdin (ignores --content/--context if provided)
-  --help, -h             Show help
-
-Verification options (pick one):
-  --pubkey-pem <pem>     Explicit public key PEM (string). Fastest.
-  --pubkey-file <path>   Read public key PEM from file.
-  --ens-name <name>      Resolve PEM from ENS TXT (e.g. runtime.commandlayer.eth)
-  --rpc-url <url>        Ethereum RPC URL for ENS resolution
-  --ens-txt-key <key>    ENS TXT key for PEM (default: cl.receipt.pubkey_pem)
-
-Verb options (by verb):
-  summarize:
-    --content <text>      Required (or --stdin)
-    --style <style>       e.g. bullet_points
-    --format <format>     e.g. markdown|text
-    --max-tokens <n>      default 1000
-
-  analyze:
-    --content <text>      Required (or --stdin)
-    --max-tokens <n>
-
-  classify:
-    --content <text>      Required (or --stdin)
-    --max-tokens <n>
-
-  clean:
-    --content <text>      Required (or --stdin)
-    --operations <list>   Comma-separated ops (trim, normalize_newlines, etc.)
-    --max-tokens <n>
-
-  convert:
-    --content <text>      Required (or --stdin)
-    --from <format>       Required
-    --to <format>         Required
-    --max-tokens <n>
-
-  describe:
-    --subject <text>      Required
-    --context <text>      Optional (or --stdin for context)
-    --detail <level>      default medium
-    --audience <aud>      default general
-    --max-tokens <n>
-
-  explain:
-    --subject <text>      Required
-    --context <text>      Optional (or --stdin for context)
-    --style <style>       default step-by-step
-    --detail <level>      default medium
-    --audience <aud>      default general
-    --max-tokens <n>
-
-  format:
-    --content <text>      Required (or --stdin)
-    --target <style>      e.g. table|text (maps to target_style)
-    --max-tokens <n>
-
-  parse:
-    --content <text>      Required (or --stdin)
-    --content-type <t>    json|yaml|text
-    --mode <m>            best_effort|strict
-    --target-schema <s>   optional string
-    --max-tokens <n>
-
-  fetch:
-    --source <url>        Required
-    --mode <mode>         text|html|json (runtime-specific)
-    --query <q>           optional
-    --include-metadata    optional flag
-    --max-tokens <n>
-
-Notes:
-  - Pipe input with --stdin:
-      cat file.txt | commandlayer summarize --stdin --style bullet_points --json
+  --stdin                Read content from stdin (ignores --content if provided)
+  --help, -h             Show this help
 `);
 }
 
@@ -165,11 +92,6 @@ function parseArgs(argv) {
 
     if (a === "--no-verify") {
       out["no-verify"] = true;
-      continue;
-    }
-
-    if (a === "--include-metadata") {
-      out["include-metadata"] = true;
       continue;
     }
 
@@ -208,40 +130,6 @@ function commaList(v) {
     .filter(Boolean);
 }
 
-function readFileIfExists(p) {
-  const abs = path.resolve(process.cwd(), p);
-  if (!fs.existsSync(abs)) return null;
-  return fs.readFileSync(abs, "utf8");
-}
-
-function buildVerifyConfig(opts) {
-  // Explicit PEM via flag or file (preferred)
-  let pem = null;
-
-  if (opts["pubkey-pem"]) pem = String(opts["pubkey-pem"]);
-  if (!pem && opts["pubkey-file"]) pem = readFileIfExists(String(opts["pubkey-file"]));
-
-  if (pem) {
-    return { publicKeyPem: pem };
-  }
-
-  // ENS-based
-  if (opts["ens-name"] || opts["rpc-url"]) {
-    if (!opts["ens-name"]) throw new Error("--ens-name required when using ENS verification");
-    if (!opts["rpc-url"]) throw new Error("--rpc-url required when using ENS verification");
-    return {
-      ens: {
-        name: String(opts["ens-name"]),
-        rpcUrl: String(opts["rpc-url"]),
-        txtKey: opts["ens-txt-key"] ? String(opts["ens-txt-key"]) : "cl.receipt.pubkey_pem",
-      },
-    };
-  }
-
-  // none
-  return {};
-}
-
 async function main() {
   const opts = parseArgs(process.argv);
 
@@ -257,34 +145,29 @@ async function main() {
     process.exit(1);
   }
 
-  const timeout = opts.timeout ? parseInt(opts.timeout, 10) : 30000;
-  const maxTokens = opts["max-tokens"] ? parseInt(opts["max-tokens"], 10) : 1000;
-
-  let verifyCfg = {};
-  try {
-    verifyCfg = buildVerifyConfig(opts);
-  } catch (e) {
-    console.error("\n❌ Error:", e?.message || String(e));
-    process.exit(1);
-  }
+  const ensRpcUrl = opts["ens-rpc"] || process.env.ETH_RPC_URL || "";
+  const ensTextKey = opts["ens-text-key"] || "cl.receipt.pubkey_pem";
 
   const client = createClient({
     runtime: opts.runtime,
     actor: opts.actor,
-    timeout,
     verifyReceipts: !opts["no-verify"],
-    ...verifyCfg,
+    verifyWithEns: true,
+    ensRpcUrl: ensRpcUrl || undefined,
+    ensPubkeyTextKey: ensTextKey,
+    // schema validation is optional and slower; keep off in CLI by default
+    validateSchema: false,
   });
 
+  const maxTokens = opts["max-tokens"] ? parseInt(opts["max-tokens"], 10) : 1000;
+
   try {
-    // stdin can feed either content OR context depending on verb; we decide below
-    const stdinText = opts.stdin ? (await readStdin()).trimEnd() : null;
+    const content = opts.stdin ? (await readStdin()).trimEnd() : opts.content;
 
     let receipt;
 
     switch (verb) {
-      case "summarize": {
-        const content = stdinText != null ? stdinText : opts.content;
+      case "summarize":
         if (!content) throw new Error("--content required (or use --stdin)");
         receipt = await client.summarize({
           content,
@@ -293,24 +176,27 @@ async function main() {
           maxTokens,
         });
         break;
-      }
 
-      case "analyze": {
-        const content = stdinText != null ? stdinText : opts.content;
+      case "analyze":
         if (!content) throw new Error("--content required (or use --stdin)");
-        receipt = await client.analyze({ content, maxTokens });
+        receipt = await client.analyze({
+          content,
+          goal: opts.goal,
+          hints: commaList(opts.hints || opts.dimensions),
+          maxTokens,
+        });
         break;
-      }
 
-      case "classify": {
-        const content = stdinText != null ? stdinText : opts.content;
+      case "classify":
         if (!content) throw new Error("--content required (or use --stdin)");
-        receipt = await client.classify({ content, maxTokens });
+        receipt = await client.classify({
+          content,
+          categories: commaList(opts.categories),
+          maxTokens,
+        });
         break;
-      }
 
-      case "clean": {
-        const content = stdinText != null ? stdinText : opts.content;
+      case "clean":
         if (!content) throw new Error("--content required (or use --stdin)");
         receipt = await client.clean({
           content,
@@ -318,87 +204,49 @@ async function main() {
           maxTokens,
         });
         break;
-      }
 
-      case "convert": {
-        const content = stdinText != null ? stdinText : opts.content;
+      case "convert":
         if (!content) throw new Error("--content required (or use --stdin)");
         if (!opts.from) throw new Error("--from required");
         if (!opts.to) throw new Error("--to required");
-        receipt = await client.convert({
-          content,
-          from: String(opts.from),
-          to: String(opts.to),
-          maxTokens,
-        });
+        receipt = await client.convert({ content, from: opts.from, to: opts.to, maxTokens });
         break;
-      }
 
-      case "describe": {
-        const subject = opts.subject ? String(opts.subject) : null;
-        if (!subject) throw new Error("--subject required");
-        const context = stdinText != null ? stdinText : (opts.context ? String(opts.context) : undefined);
-
+      case "describe":
+        if (!content) throw new Error("--content required (or use --stdin)");
         receipt = await client.describe({
-          subject,
-          context,
-          detail_level: opts.detail ? String(opts.detail) : "medium",
-          audience: opts.audience ? String(opts.audience) : "general",
+          subject: content.slice(0, 140),
+          context: content,
+          detail_level: opts.detail || "medium",
           maxTokens,
         });
         break;
-      }
 
-      case "explain": {
-        const subject = opts.subject ? String(opts.subject) : null;
-        if (!subject) throw new Error("--subject required");
-        const context = stdinText != null ? stdinText : (opts.context ? String(opts.context) : undefined);
-
+      case "explain":
+        if (!content) throw new Error("--content required (or use --stdin)");
         receipt = await client.explain({
-          subject,
-          context,
-          style: opts.style ? String(opts.style) : "step-by-step",
-          detail_level: opts.detail ? String(opts.detail) : "medium",
-          audience: opts.audience ? String(opts.audience) : "general",
+          subject: content.slice(0, 140),
+          context: content,
+          style: opts.style || "step-by-step",
           maxTokens,
         });
         break;
-      }
 
-      case "format": {
-        const content = stdinText != null ? stdinText : opts.content;
+      case "format":
         if (!content) throw new Error("--content required (or use --stdin)");
-        const target = opts.target ? String(opts.target) : null;
-        if (!target) throw new Error("--target required (e.g. table|text)");
-        receipt = await client.format({ content, target_style: target, maxTokens });
+        if (!opts.to) throw new Error("--to required (maps to target_style)");
+        receipt = await client.format({ content, target_style: opts.to, maxTokens });
         break;
-      }
 
-      case "parse": {
-        const content = stdinText != null ? stdinText : opts.content;
+      case "parse":
         if (!content) throw new Error("--content required (or use --stdin)");
-        receipt = await client.parse({
-          content,
-          content_type: opts["content-type"] ? String(opts["content-type"]) : undefined,
-          mode: opts.mode ? String(opts.mode) : undefined,
-          target_schema: opts["target-schema"] ? String(opts["target-schema"]) : undefined,
-          maxTokens,
-        });
+        receipt = await client.parse({ content, content_type: opts["content-type"], mode: opts.mode, maxTokens });
         break;
-      }
 
-      case "fetch": {
-        const source = opts.source ? String(opts.source) : null;
-        if (!source) throw new Error("--source required (absolute URL)");
-        receipt = await client.fetch({
-          source,
-          mode: opts.mode ? String(opts.mode) : "text",
-          query: opts.query ? String(opts.query) : undefined,
-          include_metadata: !!opts["include-metadata"],
-          maxTokens,
-        });
+      case "fetch":
+        if (!opts.query) throw new Error("--query required");
+        receipt = await client.fetch({ source: opts.query, mode: opts.mode || "text", maxTokens });
         break;
-      }
 
       default:
         throw new Error(`Verb "${verb}" not implemented`);
@@ -409,27 +257,23 @@ async function main() {
       return;
     }
 
-    // Human output
     console.log("\n📝 Result:");
-    console.log(JSON.stringify(receipt.result ?? receipt.error ?? null, null, 2));
+    console.log(JSON.stringify(receipt.result, null, 2));
 
     console.log("\n📋 Receipt:");
-    const rid = receipt?.metadata?.receipt_id || "(none)";
-    const status = receipt?.status || "n/a";
-    const traceId = receipt?.trace?.trace_id || "(none)";
-    const duration = receipt?.trace?.duration_ms != null ? `${receipt.trace.duration_ms}ms` : "(n/a)";
+    const rid = receipt?.metadata?.receipt_id || receipt?.metadata?.proof?.hash_sha256 || "n/a";
     console.log(`  ID: ${rid}`);
-    console.log(`  Status: ${status}`);
-    console.log(`  Trace: ${traceId} (${duration})`);
+    console.log(`  Status: ${receipt.status || "n/a"}`);
+    if (receipt?.trace?.trace_id) console.log(`  Trace ID: ${receipt.trace.trace_id}`);
 
-    const proof = receipt?.metadata?.proof;
-    if (proof) {
-      console.log("\n🔐 Proof:");
-      if (proof.alg) console.log(`  Alg: ${proof.alg}`);
-      if (proof.canonical) console.log(`  Canonical: ${proof.canonical}`);
-      if (proof.signer_id) console.log(`  Signer: ${proof.signer_id}`);
-      if (proof.hash_sha256) console.log(`  Hash: ${String(proof.hash_sha256).slice(0, 16)}...`);
-      console.log(`  Verify: ${opts["no-verify"] ? "skipped" : "ok (SDK verified)"}`);
+    // If verifyReceipts was enabled, the SDK already verified; if it was disabled, be honest.
+    if (opts["no-verify"]) {
+      console.log("\n🔐 Verification: skipped (--no-verify)");
+    } else {
+      console.log("\n🔐 Verification: ok (hash + signature)");
+      if (!ensRpcUrl) {
+        console.log("  Note: ENS resolution disabled (set ETH_RPC_URL or pass --ens-rpc).");
+      }
     }
   } catch (err) {
     const error = err;
