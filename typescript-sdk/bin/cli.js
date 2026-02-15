@@ -1,13 +1,9 @@
 // typescript-sdk/bin/cli.js
 #!/usr/bin/env node
+// Keep this file as CommonJS so it can require dist/index.cjs reliably,
+// even though the package is type=module.
 
-/**
- * CommandLayer CLI
- *
- * Uses ../dist/index.js (built output).
- */
-
-const { createClient, CommandLayerError } = require("../dist/index.js");
+const { createClient, CommandLayerError } = require("../dist/index.cjs");
 
 const VERBS = [
   "summarize",
@@ -19,7 +15,7 @@ const VERBS = [
   "explain",
   "format",
   "parse",
-  "fetch",
+  "fetch"
 ];
 
 function printUsage() {
@@ -35,31 +31,31 @@ Available verbs:
 Examples:
   commandlayer summarize --content "Long text..." --style bullet_points --json
   commandlayer analyze --content "Data..." --goal "find anomalies" --hints sentiment,tone
-  commandlayer convert --content "# Title" --from markdown --to html
+  commandlayer convert --content "# Title" --from json --to csv
   commandlayer fetch --query "https://example.com" --mode text
 
 Options:
   --content <text>       Content to process (required for most verbs)
-  --query <url|text>     URL/query (fetch verb)
-  --style <style>        Style hint (summarize, explain)
-  --format <format>      Format hint (summarize)
-  --goal <text>          Goal (analyze)
-  --hints <list>         Comma-separated hints (analyze)
-  --dimensions <list>    Alias for --hints (analyze)
-  --categories <list>    Comma-separated categories (classify)
+  --query <url>          URL to fetch (fetch verb)
+  --style <style>        summarize/explain style hint
+  --format <format>      summarize format hint
+  --goal <text>          analyze goal
+  --hints <list>         analyze hints (comma-separated)
+  --dimensions <list>    alias for --hints
+  --categories <list>    classify categories (comma-separated)
   --mode <mode>          fetch mode: text|html|json (default: text)
-  --from <format>        Source format (convert)
-  --to <format>          Target format (convert)
+  --from <format>        convert source format
+  --to <format>          convert target format
   --detail <level>       describe detail: short|medium|detailed (default: medium)
   --max-tokens <n>       Maximum output tokens (default: 1000)
   --actor <id>           Actor identifier
   --runtime <url>        Custom runtime URL
-  --no-verify            Disable receipt verification (hash+sig)
-  --ens-rpc <url>        ETH RPC URL for ENS pubkey resolution (default: env ETH_RPC_URL)
+  --no-verify            Disable receipt verification
+  --ens-rpc <url>        ETH RPC URL for ENS pubkey resolution (or env ETH_RPC_URL)
   --ens-text-key <key>   ENS TXT key for pubkey (default: cl.receipt.pubkey_pem)
   --json                 Output raw receipt JSON
-  --stdin                Read content from stdin (ignores --content if provided)
-  --help, -h             Show this help
+  --stdin                Read content from stdin
+  --help, -h             Show help
 `);
 }
 
@@ -79,17 +75,14 @@ function parseArgs(argv) {
       out.help = true;
       continue;
     }
-
     if (a === "--json") {
       out.json = true;
       continue;
     }
-
     if (a === "--stdin") {
       out.stdin = true;
       continue;
     }
-
     if (a === "--no-verify") {
       out["no-verify"] = true;
       continue;
@@ -98,17 +91,13 @@ function parseArgs(argv) {
     if (a.startsWith("--")) {
       const key = a.slice(2);
       const next = args[i + 1];
-
-      if (next === undefined || next.startsWith("-")) {
-        out[key] = true;
-      } else {
+      if (next === undefined || next.startsWith("-")) out[key] = true;
+      else {
         out[key] = next;
         i++;
       }
-      continue;
     }
   }
-
   return out;
 }
 
@@ -141,7 +130,6 @@ async function main() {
   const verb = opts._[0];
   if (!VERBS.includes(verb)) {
     console.error(`Error: Unknown verb "${verb}"`);
-    console.error(`Available verbs: ${VERBS.join(", ")}`);
     process.exit(1);
   }
 
@@ -155,8 +143,7 @@ async function main() {
     verifyWithEns: true,
     ensRpcUrl: ensRpcUrl || undefined,
     ensPubkeyTextKey: ensTextKey,
-    // schema validation is optional and slower; keep off in CLI by default
-    validateSchema: false,
+    validateSchema: false
   });
 
   const maxTokens = opts["max-tokens"] ? parseInt(opts["max-tokens"], 10) : 1000;
@@ -169,12 +156,7 @@ async function main() {
     switch (verb) {
       case "summarize":
         if (!content) throw new Error("--content required (or use --stdin)");
-        receipt = await client.summarize({
-          content,
-          style: opts.style,
-          format: opts.format,
-          maxTokens,
-        });
+        receipt = await client.summarize({ content, style: opts.style, format: opts.format, maxTokens });
         break;
 
       case "analyze":
@@ -183,26 +165,18 @@ async function main() {
           content,
           goal: opts.goal,
           hints: commaList(opts.hints || opts.dimensions),
-          maxTokens,
+          maxTokens
         });
         break;
 
       case "classify":
         if (!content) throw new Error("--content required (or use --stdin)");
-        receipt = await client.classify({
-          content,
-          categories: commaList(opts.categories),
-          maxTokens,
-        });
+        receipt = await client.classify({ content, categories: commaList(opts.categories), maxTokens });
         break;
 
       case "clean":
         if (!content) throw new Error("--content required (or use --stdin)");
-        receipt = await client.clean({
-          content,
-          operations: commaList(opts.operations),
-          maxTokens,
-        });
+        receipt = await client.clean({ content, operations: commaList(opts.operations), maxTokens });
         break;
 
       case "convert":
@@ -218,7 +192,7 @@ async function main() {
           subject: content.slice(0, 140),
           context: content,
           detail_level: opts.detail || "medium",
-          maxTokens,
+          maxTokens
         });
         break;
 
@@ -228,7 +202,7 @@ async function main() {
           subject: content.slice(0, 140),
           context: content,
           style: opts.style || "step-by-step",
-          maxTokens,
+          maxTokens
         });
         break;
 
@@ -266,30 +240,15 @@ async function main() {
     console.log(`  Status: ${receipt.status || "n/a"}`);
     if (receipt?.trace?.trace_id) console.log(`  Trace ID: ${receipt.trace.trace_id}`);
 
-    // If verifyReceipts was enabled, the SDK already verified; if it was disabled, be honest.
-    if (opts["no-verify"]) {
-      console.log("\n🔐 Verification: skipped (--no-verify)");
-    } else {
-      console.log("\n🔐 Verification: ok (hash + signature)");
-      if (!ensRpcUrl) {
-        console.log("  Note: ENS resolution disabled (set ETH_RPC_URL or pass --ens-rpc).");
-      }
-    }
+    if (opts["no-verify"]) console.log("\n🔐 Verification: skipped (--no-verify)");
+    else console.log("\n🔐 Verification: ok (hash + signature)");
   } catch (err) {
-    const error = err;
-
-    console.error("\n❌ Error:", error?.message || String(error));
-
-    if (error instanceof CommandLayerError || error?.statusCode || error?.details) {
-      if (error.statusCode) console.error(`   Status: ${error.statusCode}`);
-      if (error.details) console.error("   Details:", error.details);
+    console.error("\n❌ Error:", err?.message || String(err));
+    if (err instanceof CommandLayerError || err?.statusCode || err?.details) {
+      if (err.statusCode) console.error(`   Status: ${err.statusCode}`);
+      if (err.details) console.error("   Details:", err.details);
     }
-
     process.exit(1);
-  } finally {
-    try {
-      if (typeof client?.close === "function") client.close();
-    } catch {}
   }
 }
 
