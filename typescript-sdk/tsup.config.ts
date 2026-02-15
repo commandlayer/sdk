@@ -9,7 +9,10 @@ export default defineConfig([
     clean: true,
     target: "es2022",
     platform: "node",
-    outDir: "dist"
+    outDir: "dist",
+    outExtension({ format }) {
+      return { js: format === "esm" ? ".mjs" : ".cjs" };
+    }
   },
   {
     entry: ["src/cli.ts"],

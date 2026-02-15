@@ -271,6 +271,7 @@ Typical flow:
 cd typescript-sdk
 npm install
 npm run build
+npm run test:cli-smoke
 node dist/cli.cjs summarize --content "test" --style bullet_points --json
 ```
 ---
