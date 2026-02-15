@@ -19,7 +19,6 @@ export default defineConfig([
     clean: false,
     target: "es2022",
     platform: "node",
-    outDir: "dist",
-    banner: { js: "#!/usr/bin/env node" }
+    outDir: "dist"
   }
 ]);
