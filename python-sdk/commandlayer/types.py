@@ -1,7 +1,28 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
 from typing import Any, Literal, TypedDict
 
+Receipt = dict[str, Any]
 
-class VerifyChecks(TypedDict, total=False):
+
+class EnsVerifyOptions(TypedDict, total=False):
+    """ENS options for receipt verification."""
+
+    name: str
+    rpc_url: str
+    rpcUrl: str
+
+
+class VerifyOptions(TypedDict, total=False):
+    """Verification options for client-side receipt checks."""
+
+    public_key: str
+    publicKey: str
+    ens: EnsVerifyOptions
+
+
+class VerifyChecks(TypedDict):
     hash_matches: bool
     signature_valid: bool
     receipt_id_matches: bool
@@ -9,7 +30,7 @@ class VerifyChecks(TypedDict, total=False):
     canonical_matches: bool
 
 
-class VerifyValues(TypedDict, total=False):
+class VerifyValues(TypedDict):
     verb: str | None
     signer_id: str | None
     alg: str | None
@@ -21,7 +42,7 @@ class VerifyValues(TypedDict, total=False):
     ens_txt_key: str | None
 
 
-class VerifyErrors(TypedDict, total=False):
+class VerifyErrors(TypedDict):
     signature_error: str | None
     ens_error: str | None
     verify_error: str | None
@@ -34,4 +55,8 @@ class VerifyResult(TypedDict):
     errors: VerifyErrors
 
 
-Receipt = dict[str, Any]
+@dataclass(frozen=True)
+class SignerKeyResolution:
+    algorithm: Literal["ed25519"]
+    kid: str
+    raw_public_key_bytes: bytes

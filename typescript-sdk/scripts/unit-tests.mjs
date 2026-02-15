@@ -5,17 +5,7 @@
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 
-const {
-  canonicalizeStableJsonV1,
-  sha256HexUtf8,
-  parseEd25519Pubkey,
-  verifyEd25519SignatureOverUtf8HashString,
-  recomputeReceiptHashSha256,
-  verifyReceipt,
-  CommandLayerError,
-  CommandLayerClient,
-} = require("../dist/index.cjs");
-
+const ethers = require("ethers");
 const nacl = require("tweetnacl");
 
 let passed = 0;
@@ -41,6 +31,64 @@ function assertThrows(fn, name) {
     console.log(`PASS: ${name}`);
   }
 }
+
+async function assertRejects(fn, expected, name) {
+  try {
+    await fn();
+    failed++;
+    console.error(`FAIL: ${name} (did not throw)`);
+  } catch (err) {
+    const msg = err?.message || String(err);
+    if (!msg.includes(expected)) {
+      failed++;
+      console.error(`FAIL: ${name} (unexpected message: ${msg})`);
+      return;
+    }
+    passed++;
+    console.log(`PASS: ${name}`);
+  }
+}
+
+const kp = nacl.sign.keyPair();
+const b64Key = Buffer.from(kp.publicKey).toString("base64");
+const hexKey = Buffer.from(kp.publicKey).toString("hex");
+
+const ensFixtures = {
+  "summarizeagent.eth": { "cl.receipt.signer": "runtime.commandlayer.eth" },
+  "runtime.commandlayer.eth": { "cl.sig.pub": `ed25519:${b64Key}`, "cl.sig.kid": "2026-01" },
+  "missing-signer.eth": {},
+  "missing-pub.eth": { "cl.receipt.signer": "signer-without-pub.eth" },
+  "signer-without-pub.eth": { "cl.sig.kid": "2026-01" },
+  "malformed-pub.eth": { "cl.receipt.signer": "signer-with-malformed-pub.eth" },
+  "signer-with-malformed-pub.eth": { "cl.sig.pub": "ed25519:not-base64", "cl.sig.kid": "2026-01" },
+};
+
+class MockResolver {
+  constructor(name) {
+    this.name = name;
+  }
+
+  async getText(key) {
+    return ensFixtures[this.name]?.[key] ?? "";
+  }
+}
+
+ethers.ethers.JsonRpcProvider.prototype.getResolver = async function(name) {
+  if (!(name in ensFixtures)) return null;
+  return new MockResolver(name);
+};
+
+const {
+  canonicalizeStableJsonV1,
+  sha256HexUtf8,
+  parseEd25519Pubkey,
+  verifyEd25519SignatureOverUtf8HashString,
+  recomputeReceiptHashSha256,
+  verifyReceipt,
+  resolveSignerKey,
+  CommandLayerError,
+  CommandLayerClient,
+} = require("../dist/index.cjs");
 
 // ---- Canonicalization ----
 
@@ -84,10 +132,6 @@ assert(sha256HexUtf8("hello") !== sha256HexUtf8("world"), "sha256 differs for di
 
 // ---- Ed25519 pubkey parsing ----
 
-const kp = nacl.sign.keyPair();
-const b64Key = Buffer.from(kp.publicKey).toString("base64");
-const hexKey = Buffer.from(kp.publicKey).toString("hex");
-
 const pk1 = parseEd25519Pubkey(b64Key);
 assert(pk1.length === 32, "parse base64 pubkey");
 
@@ -123,6 +167,31 @@ assert(
   "wrong key rejects"
 );
 
+// ---- ENS signer key resolution ----
+
+const signerKey = await resolveSignerKey("summarizeagent.eth", "http://mock-rpc.local");
+assert(signerKey.algorithm === "ed25519", "resolveSignerKey returns algorithm");
+assert(signerKey.kid === "2026-01", "resolveSignerKey returns kid from cl.sig.kid");
+assert(Buffer.from(signerKey.rawPublicKeyBytes).toString("base64") === b64Key, "resolveSignerKey returns public key bytes from cl.sig.pub");
+
+await assertRejects(
+  () => resolveSignerKey("missing-signer.eth", "http://mock-rpc.local"),
+  "ENS TXT cl.receipt.signer missing",
+  "resolveSignerKey throws clear error when cl.receipt.signer missing"
+);
+
+await assertRejects(
+  () => resolveSignerKey("missing-pub.eth", "http://mock-rpc.local"),
+  "ENS TXT cl.sig.pub missing",
+  "resolveSignerKey throws clear error when cl.sig.pub missing"
+);
+
+await assertRejects(
+  () => resolveSignerKey("malformed-pub.eth", "http://mock-rpc.local"),
+  "ENS TXT cl.sig.pub malformed",
+  "resolveSignerKey throws clear error when cl.sig.pub malformed"
+);
+
 // ---- Receipt verification (end-to-end) ----
 
 const receipt = {
@@ -147,10 +216,19 @@ receipt.metadata.proof.signature_b64 = Buffer.from(receiptSig).toString("base64"
 receipt.metadata.receipt_id = hash_sha256;
 
 const vr = await verifyReceipt(receipt, { publicKey: `ed25519:${b64Key}` });
-assert(vr.ok === true, "verifyReceipt ok for valid receipt");
+assert(vr.ok === true, "verifyReceipt ok for valid receipt (explicit key)");
 assert(vr.checks.hash_matches === true, "verifyReceipt hash matches");
 assert(vr.checks.signature_valid === true, "verifyReceipt signature valid");
 assert(vr.checks.receipt_id_matches === true, "verifyReceipt receipt_id matches");
+
+const vrEns = await verifyReceipt(receipt, {
+  ens: {
+    name: "summarizeagent.eth",
+    rpcUrl: "http://mock-rpc.local"
+  }
+});
+assert(vrEns.ok === true, "verifyReceipt ok with ENS cl.receipt.signer + cl.sig.pub");
+assert(vrEns.values.pubkey_source === "ens", "verifyReceipt reports ENS key source");
 
 // Tampered receipt
 const tamperedReceipt = JSON.parse(JSON.stringify(receipt));

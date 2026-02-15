@@ -108,19 +108,16 @@ export class CommandLayerError extends Error {
 }
 
 export type EnsVerifyOptions = {
-  /** ENS name that holds TXT records (commonly runtime.commandlayer.eth) */
+  /** Agent ENS name that holds TXT records (e.g. summarizeagent.eth) */
   name: string;
   /** Ethereum RPC URL (required for ENS resolution) */
   rpcUrl: string;
-  /**
-   * TXT record key that contains an Ed25519 public key (32 bytes).
-   * Accepts formats:
-   * - "ed25519:<base64>"
-   * - "<base64>" (32 bytes)
-   * - "0x<hex>" / "<hex>" (64 hex chars)
-   * Default: "cl.pubkey"
-   */
-  pubkeyTextKey?: string;
+};
+
+export type SignerKeyResolution = {
+  algorithm: "ed25519";
+  kid: string;
+  rawPublicKeyBytes: Uint8Array;
 };
 
 export type VerifyOptions = {
@@ -290,25 +287,47 @@ export function verifyEd25519SignatureOverUtf8HashString(
 }
 
 // -----------------------
-// ENS TXT pubkey resolution (ethers v6)
+// ENS TXT signer key resolution (ethers v6)
 // -----------------------
-export async function resolveEnsEd25519Pubkey(
-  ens: EnsVerifyOptions
-): Promise<{ pubkey: Uint8Array | null; source: "ens" | null; error?: string; txtKey: string; txtValue?: string }> {
-  const txtKey = ens.pubkeyTextKey || "cl.pubkey";
-  try {
-    const provider = new ethers.JsonRpcProvider(ens.rpcUrl);
-    const resolver = await provider.getResolver(ens.name);
-    if (!resolver) return { pubkey: null, source: null, error: "No resolver for ENS name", txtKey };
-
-    const txt = (await resolver.getText(txtKey))?.trim();
-    if (!txt) return { pubkey: null, source: null, error: `ENS TXT ${txtKey} missing`, txtKey };
-
-    const pubkey = parseEd25519Pubkey(txt);
-    return { pubkey, source: "ens", txtKey, txtValue: txt };
-  } catch (e: any) {
-    return { pubkey: null, source: null, error: e?.message || "ENS resolution failed", txtKey };
+export async function resolveSignerKey(name: string, rpcUrl: string): Promise<SignerKeyResolution> {
+  const provider = new ethers.JsonRpcProvider(rpcUrl);
+  const agentResolver = await provider.getResolver(name);
+  if (!agentResolver) {
+    throw new Error(`No resolver for agent ENS name: ${name}`);
   }
+
+  const signerName = (await agentResolver.getText("cl.receipt.signer"))?.trim();
+  if (!signerName) {
+    throw new Error(`ENS TXT cl.receipt.signer missing for agent ENS name: ${name}`);
+  }
+
+  const signerResolver = await provider.getResolver(signerName);
+  if (!signerResolver) {
+    throw new Error(`No resolver for signer ENS name: ${signerName}`);
+  }
+
+  const pubKeyText = (await signerResolver.getText("cl.sig.pub"))?.trim();
+  if (!pubKeyText) {
+    throw new Error(`ENS TXT cl.sig.pub missing for signer ENS name: ${signerName}`);
+  }
+
+  const kid = (await signerResolver.getText("cl.sig.kid"))?.trim();
+  if (!kid) {
+    throw new Error(`ENS TXT cl.sig.kid missing for signer ENS name: ${signerName}`);
+  }
+
+  let rawPublicKeyBytes: Uint8Array;
+  try {
+    rawPublicKeyBytes = parseEd25519Pubkey(pubKeyText);
+  } catch (e: any) {
+    throw new Error(`ENS TXT cl.sig.pub malformed for signer ENS name: ${signerName}. ${e?.message || String(e)}`);
+  }
+
+  return {
+    algorithm: "ed25519",
+    kid,
+    rawPublicKeyBytes
+  };
 }
 
 // -----------------------
@@ -372,13 +391,13 @@ export async function verifyReceipt(receipt: Receipt, opts: VerifyOptions = {}):
       pubkey = parseEd25519Pubkey(opts.publicKey);
       pubkey_source = "explicit";
     } else if (opts.ens) {
-      const res = await resolveEnsEd25519Pubkey(opts.ens);
-      ens_txt_key = res.txtKey;
-      if (!res.pubkey) {
-        ens_error = res.error || "ENS pubkey not found";
-      } else {
-        pubkey = res.pubkey;
+      ens_txt_key = "cl.receipt.signer -> cl.sig.pub, cl.sig.kid";
+      try {
+        const signerKey = await resolveSignerKey(opts.ens.name, opts.ens.rpcUrl);
+        pubkey = signerKey.rawPublicKeyBytes;
         pubkey_source = "ens";
+      } catch (e: any) {
+        ens_error = e?.message || "ENS signer key resolution failed";
       }
     }
 
