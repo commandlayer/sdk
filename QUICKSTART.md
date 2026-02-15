@@ -32,6 +32,8 @@ Python
 pip install commandlayer
 ```
 
+---
+
 # 2️⃣ Make Your First Call
 
 ## TypeScript
@@ -71,6 +73,9 @@ commandlayer summarize \
   --style bullet_points
 ```
 
+---
+
+
 # 3️⃣ What You Get Back
 
 Every call returns a signed receipt.
@@ -86,6 +91,9 @@ result.metadata.proof.signature_ed25519
 result.metadata.proof.signer_id
 ```
 Receipts are signed using Ed25519 and verified automatically by the SDK.
+
+---
+
 
 # 4️⃣ Available Verbs
 
@@ -104,6 +112,9 @@ The Commons SDK includes 10 verbs:
 
 All verbs return structured, signed receipts.
 
+---
+
+
 # 5️⃣ Configuration
 ```
 const client = createClient({
@@ -112,6 +123,8 @@ const client = createClient({
   verifyReceipts: true                         // default
 });
 ```
+---
+
 
 # 6️⃣ Production Notes
 
@@ -133,4 +146,5 @@ const client = createClient({
 CommandLayer turns agent actions into verifiable infrastructure.
 
 You're ready to build.
+
 
