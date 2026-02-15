@@ -1,0 +1,41 @@
+name: Python SDK Tests
+
+on:
+  push:
+    paths:
+      - "python-sdk/**"
+      - ".github/workflows/python-sdk-tests.yml"
+  pull_request:
+    paths:
+      - "python-sdk/**"
+      - ".github/workflows/python-sdk-tests.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    defaults:
+      run:
+        working-directory: python-sdk
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: pip install -e '.[dev]'
+
+      - name: Lint (ruff)
+        run: python -m ruff check commandlayer/
+
+      - name: Type check (mypy)
+        run: python -m mypy commandlayer/
+
+      - name: Tests (pytest)
+        run: python -m pytest tests/ -v

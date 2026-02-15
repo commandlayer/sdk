@@ -3,7 +3,7 @@ import copy
 import hashlib
 import json
 import re
-from typing import Any
+from typing import Any, Literal
 
 from nacl.signing import VerifyKey
 from nacl.exceptions import BadSignatureError
@@ -83,7 +83,10 @@ def resolve_ens_ed25519_pubkey(name: str, rpc_url: str, pubkey_text_key: str = "
             return {"pubkey": None, "source": None, "error": "Unable to connect to RPC", "txt_key": pubkey_text_key}
 
         try:
-            txt = w3.ens.get_text(name, pubkey_text_key)  # type: ignore[attr-defined]
+            ens_module = w3.ens  # type: ignore[attr-defined]
+            if ens_module is None:
+                return {"pubkey": None, "source": None, "error": "ENS module not available", "txt_key": pubkey_text_key}
+            txt = ens_module.get_text(name, pubkey_text_key)  # type: ignore[union-attr]
         except Exception as err:
             return {"pubkey": None, "source": None, "error": f"ENS TXT lookup failed: {err}", "txt_key": pubkey_text_key}
 
@@ -142,22 +145,24 @@ def verify_receipt(receipt: Receipt, public_key: str | None = None, ens: dict[st
         hash_matches = bool(claimed_hash and claimed_hash == recomputed_hash)
 
         metadata = receipt.get("metadata") if isinstance(receipt.get("metadata"), dict) else {}
+        assert isinstance(metadata, dict)  # narrowing for mypy; always true given the guard above
         receipt_id = metadata.get("receipt_id") or receipt.get("receipt_id")
         receipt_id = receipt_id if isinstance(receipt_id, str) else None
         receipt_id_matches = bool(claimed_hash and receipt_id == claimed_hash)
 
-        pubkey = None
-        pubkey_source = None
-        ens_error = None
-        ens_txt_key = None
+        pubkey: bytes | None = None
+        pubkey_source: Literal["explicit", "ens"] | None = None
+        ens_error: str | None = None
+        ens_txt_key: str | None = None
 
         if public_key:
             pubkey = parse_ed25519_pubkey(public_key)
             pubkey_source = "explicit"
         elif ens:
+            ens_rpc_url = ens.get("rpcUrl") or ens.get("rpc_url") or ""
             res = resolve_ens_ed25519_pubkey(
                 name=ens["name"],
-                rpc_url=ens.get("rpcUrl") or ens.get("rpc_url"),
+                rpc_url=str(ens_rpc_url),
                 pubkey_text_key=ens.get("pubkeyTextKey") or ens.get("pubkey_text_key") or "cl.pubkey",
             )
             ens_txt_key = res.get("txt_key")
