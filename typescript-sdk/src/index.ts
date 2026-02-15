@@ -642,7 +642,7 @@ export class CommandLayerClient {
         signal: controller.signal
       });
 
-      const data = await resp.json().catch(() => ({}));
+      const data: any = await resp.json().catch(() => ({}));
 
       if (!resp.ok) {
         throw new CommandLayerError(
