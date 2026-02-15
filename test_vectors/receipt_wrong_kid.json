@@ -1,0 +1,29 @@
+{
+  "issuer": "parseagent.eth",
+  "verb": "summarize",
+  "version": "1.0.0",
+  "timestamp": "2026-01-01T00:00:00Z",
+  "payload_hash": "2f77668a9dfbf8d5848b847cc9a6f5a37fd386f0f1ba7f876643d14f2bba7f70",
+  "receipt_hash": "",
+  "alg": "ed25519-sha256",
+  "kid": "v2",
+  "sig": "",
+  "x402": {
+    "verb": "summarize",
+    "version": "1.0.0",
+    "entry": "x402://parseagent.eth/summarize/v1.0.0"
+  },
+  "result": {
+    "summary": "fixture"
+  },
+  "metadata": {
+    "proof": {
+      "alg": "ed25519-sha256",
+      "canonical": "cl-stable-json-v1",
+      "signer_id": "runtime.commandlayer.eth",
+      "hash_sha256": "aa23f470b2d4f581c2c27e68c7ccbc2ad3be1d09c07514ec00c414d0ceee263a",
+      "signature_b64": "oxkd3MZUdTjY6uTvRjDRKz4gcWNvO0ievh9uNC5ZQq1n1OXEFKCcfCEmGRR2CbWy6ak0X/TY5l8on8DA0tpEAg=="
+    },
+    "receipt_id": "aa23f470b2d4f581c2c27e68c7ccbc2ad3be1d09c07514ec00c414d0ceee263a"
+  }
+}
