@@ -614,6 +614,10 @@ export class CommandLayerClient {
   }
 
   async call(verb: Verb, body: Record<string, any>): Promise<Receipt> {
+    if (!VERBS.includes(verb as any)) {
+      throw new CommandLayerError(`Unsupported verb: ${verb}`, 400);
+    }
+
     const url = `${this.runtime}/${verb}/v1.0.0`;
 
     this.ensureVerifyConfigIfEnabled();
@@ -642,7 +646,15 @@ export class CommandLayerClient {
         signal: controller.signal
       });
 
-      const data: any = await resp.json().catch(() => ({}));
+      let data: any;
+      try {
+        data = await resp.json();
+      } catch {
+        if (!resp.ok) {
+          throw new CommandLayerError(`HTTP ${resp.status} (non-JSON response)`, resp.status);
+        }
+        throw new CommandLayerError("Runtime returned non-JSON response", resp.status);
+      }
 
       if (!resp.ok) {
         throw new CommandLayerError(

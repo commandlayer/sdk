@@ -2,6 +2,11 @@
 import { Command } from "commander";
 import { createClient, type Receipt } from "./index";
 
+function parseIntSafe(value: string, fallback: number): number {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : fallback;
+}
+
 const program = new Command();
 
 program
@@ -41,14 +46,14 @@ withCommonOptions(
   const client = createClient({
     runtime: root.runtime,
     actor: root.actor,
-    timeoutMs: Number(root.timeoutMs)
+    timeoutMs: parseIntSafe(root.timeoutMs, 30_000)
   });
 
   const receipt = await client.summarize({
     content: opts.content,
     style: opts.style,
     format: opts.format,
-    maxTokens: Number(opts.maxTokens)
+    maxTokens: parseIntSafe(opts.maxTokens, 1000)
   });
 
   printResult(receipt, !!root.json);
@@ -60,13 +65,13 @@ withCommonOptions(program.command("analyze").description("Analyze content").opti
     const client = createClient({
       runtime: root.runtime,
       actor: root.actor,
-      timeoutMs: Number(root.timeoutMs)
+      timeoutMs: parseIntSafe(root.timeoutMs, 30_000)
     });
 
     const receipt = await client.analyze({
       content: opts.content,
       goal: opts.goal,
-      maxTokens: Number(opts.maxTokens)
+      maxTokens: parseIntSafe(opts.maxTokens, 1000)
     });
 
     printResult(receipt, !!root.json);
@@ -80,7 +85,7 @@ program.command("call").description("Call a verb with a raw JSON payload").requi
     const client = createClient({
       runtime: root.runtime,
       actor: root.actor,
-      timeoutMs: Number(root.timeoutMs)
+      timeoutMs: parseIntSafe(root.timeoutMs, 30_000)
     });
 
     const body = JSON.parse(opts.body) as Record<string, unknown>;

@@ -238,10 +238,16 @@ class CommandLayerClient:
             if not result["ok"]:
                 raise CommandLayerError("Receipt verification failed", 422, result)
 
-        return data
+        return data  # type: ignore[no-any-return]
 
     def close(self):
         self._http.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args: object):
+        self.close()
 
 
 def create_client(**kwargs) -> CommandLayerClient:
