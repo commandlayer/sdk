@@ -71,7 +71,7 @@ receipt = client.summarize(
     style="bullet_points"
 )
 
-print(receipt.result["summary"])
+print(receipt["result"]["summary"])
 ```
 
 ---
