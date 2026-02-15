@@ -1,0 +1,56 @@
+// typescript-sdk/package.json
+{
+  "name": "@commandlayer/sdk",
+  "version": "1.0.0",
+  "description": "CommandLayer TypeScript SDK — semantic verbs, typed schemas, signed receipts.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/commandlayer/commandlayer"
+  },
+  "homepage": "https://commandlayer.org",
+  "bugs": {
+    "url": "https://github.com/commandlayer/commandlayer/issues"
+  },
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "bin": {
+    "commandlayer": "./bin/cli.js"
+  },
+  "files": [
+    "dist/",
+    "bin/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "clean": "rimraf dist",
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "smoke": "node bin/cli.js summarize --content \"test\" --style bullet_points --json"
+  },
+  "dependencies": {
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
+    "ethers": "^6.15.0"
+  },
+  "devDependencies": {
+    "tsup": "^8.2.4",
+    "typescript": "^5.5.4",
+    "rimraf": "^6.0.1"
+  }
+}
