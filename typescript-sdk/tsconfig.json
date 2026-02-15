@@ -1,18 +1,16 @@
-// typescript-sdk/tsconfig.json
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["ES2022", "DOM"],
+    "lib": ["ES2022"],
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "strict": true,
     "declaration": true,
-    "declarationMap": false,
     "sourceMap": true,
-    "outDir": "dist",
-    "rootDir": "src",
+    "esModuleInterop": true,
     "skipLibCheck": true,
-    "esModuleInterop": true
+    "forceConsistentCasingInFileNames": true,
+    "types": ["node"]
   },
   "include": ["src/**/*.ts"]
 }
