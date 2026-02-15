@@ -1,16 +1,23 @@
+// typescript-sdk/bin/cli.js
 #!/usr/bin/env node
 
 /**
  * CommandLayer CLI
  *
- * Quick command-line interface for testing CommandLayer verbs.
- *
- * Works with the monorepo layout:
+ * Monorepo layout:
  *   typescript-sdk/
  *     dist/index.js
  *     bin/cli.js   (this file)
+ *
+ * This CLI matches the UPDATED SDK:
+ * - Real receipt verification (canonicalize + hash + Ed25519)
+ * - Optional ENS pubkey resolution (ethers v6) OR explicit PEM
+ *
+ * Node 18+ recommended.
  */
 
+const fs = require("fs");
+const path = require("path");
 const { createClient, CommandLayerError } = require("../dist/index.js");
 
 const VERBS = [
@@ -37,33 +44,95 @@ Available verbs:
   ${VERBS.join(", ")}
 
 Examples:
-  commandlayer summarize --content "Long text..." --style bullet_points
-  commandlayer analyze --content "Data..." --dimensions sentiment,tone,themes
-  commandlayer convert --content "# Title" --from markdown --to html
-  commandlayer fetch --query "https://example.com" --mode text
+  commandlayer summarize --content "Long text..." --style bullet_points --json
+  commandlayer analyze --content "Data..." --json
+  commandlayer clean --content " a\\n\\n b " --operations trim,normalize_newlines,remove_empty_lines --json
+  commandlayer convert --content '{"a":1,"b":2}' --from json --to csv --json
+  commandlayer describe --subject "CommandLayer receipt" --context "..." --detail medium --json
+  commandlayer explain --subject "x402 receipt verification" --context "..." --style step-by-step --json
+  commandlayer format --content "a: 1\\nb: 2" --target table --json
+  commandlayer parse --content '{"a":1}' --content-type json --mode strict --json
+  commandlayer fetch --source "https://example.com" --mode text --json
 
-Options:
-  --content <text>       Content to process (required for most verbs)
-  --query <url|text>     Query/URL (fetch verb)
-  --style <style>        Style hint (summarize, explain)
-  --format <format>      Format hint (summarize)
-  --dimensions <list>    Comma-separated dimensions (analyze)
-  --categories <list>    Comma-separated categories (classify)
-  --mode <mode>          fetch mode: text|html|json (default: text)
-  --from <format>        Source format (convert)
-  --to <format>          Target format (convert, format)
-  --detail <level>       describe detail: brief|medium|detailed (default: medium)
-  --max-tokens <n>       Maximum output tokens (default: 1000)
-  --actor <id>           Actor identifier
-  --runtime <url>        Custom runtime URL
-  --no-verify            Disable receipt verification
+Global options:
+  --actor <id>           Actor identifier (default: sdk-user)
+  --runtime <url>        Custom runtime URL (default: https://runtime.commandlayer.org)
+  --timeout <ms>         Request timeout (default: 30000)
+  --no-verify            Disable receipt verification (NOT recommended)
   --json                 Output raw receipt JSON
-  --stdin                Read content from stdin (ignores --content if provided)
-  --help, -h             Show this help
+  --stdin                Read content/context from stdin (ignores --content/--context if provided)
+  --help, -h             Show help
+
+Verification options (pick one):
+  --pubkey-pem <pem>     Explicit public key PEM (string). Fastest.
+  --pubkey-file <path>   Read public key PEM from file.
+  --ens-name <name>      Resolve PEM from ENS TXT (e.g. runtime.commandlayer.eth)
+  --rpc-url <url>        Ethereum RPC URL for ENS resolution
+  --ens-txt-key <key>    ENS TXT key for PEM (default: cl.receipt.pubkey_pem)
+
+Verb options (by verb):
+  summarize:
+    --content <text>      Required (or --stdin)
+    --style <style>       e.g. bullet_points
+    --format <format>     e.g. markdown|text
+    --max-tokens <n>      default 1000
+
+  analyze:
+    --content <text>      Required (or --stdin)
+    --max-tokens <n>
+
+  classify:
+    --content <text>      Required (or --stdin)
+    --max-tokens <n>
+
+  clean:
+    --content <text>      Required (or --stdin)
+    --operations <list>   Comma-separated ops (trim, normalize_newlines, etc.)
+    --max-tokens <n>
+
+  convert:
+    --content <text>      Required (or --stdin)
+    --from <format>       Required
+    --to <format>         Required
+    --max-tokens <n>
+
+  describe:
+    --subject <text>      Required
+    --context <text>      Optional (or --stdin for context)
+    --detail <level>      default medium
+    --audience <aud>      default general
+    --max-tokens <n>
+
+  explain:
+    --subject <text>      Required
+    --context <text>      Optional (or --stdin for context)
+    --style <style>       default step-by-step
+    --detail <level>      default medium
+    --audience <aud>      default general
+    --max-tokens <n>
+
+  format:
+    --content <text>      Required (or --stdin)
+    --target <style>      e.g. table|text (maps to target_style)
+    --max-tokens <n>
+
+  parse:
+    --content <text>      Required (or --stdin)
+    --content-type <t>    json|yaml|text
+    --mode <m>            best_effort|strict
+    --target-schema <s>   optional string
+    --max-tokens <n>
+
+  fetch:
+    --source <url>        Required
+    --mode <mode>         text|html|json (runtime-specific)
+    --query <q>           optional
+    --include-metadata    optional flag
+    --max-tokens <n>
 
 Notes:
-  - Use --stdin to pipe content in:
-      cat file.txt | commandlayer summarize --stdin --style bullet_points
+  - Pipe input with --stdin:
+      cat file.txt | commandlayer summarize --stdin --style bullet_points --json
 `);
 }
 
@@ -99,11 +168,15 @@ function parseArgs(argv) {
       continue;
     }
 
+    if (a === "--include-metadata") {
+      out["include-metadata"] = true;
+      continue;
+    }
+
     if (a.startsWith("--")) {
       const key = a.slice(2);
       const next = args[i + 1];
 
-      // flags that require a value
       if (next === undefined || next.startsWith("-")) {
         out[key] = true;
       } else {
@@ -135,6 +208,40 @@ function commaList(v) {
     .filter(Boolean);
 }
 
+function readFileIfExists(p) {
+  const abs = path.resolve(process.cwd(), p);
+  if (!fs.existsSync(abs)) return null;
+  return fs.readFileSync(abs, "utf8");
+}
+
+function buildVerifyConfig(opts) {
+  // Explicit PEM via flag or file (preferred)
+  let pem = null;
+
+  if (opts["pubkey-pem"]) pem = String(opts["pubkey-pem"]);
+  if (!pem && opts["pubkey-file"]) pem = readFileIfExists(String(opts["pubkey-file"]));
+
+  if (pem) {
+    return { publicKeyPem: pem };
+  }
+
+  // ENS-based
+  if (opts["ens-name"] || opts["rpc-url"]) {
+    if (!opts["ens-name"]) throw new Error("--ens-name required when using ENS verification");
+    if (!opts["rpc-url"]) throw new Error("--rpc-url required when using ENS verification");
+    return {
+      ens: {
+        name: String(opts["ens-name"]),
+        rpcUrl: String(opts["rpc-url"]),
+        txtKey: opts["ens-txt-key"] ? String(opts["ens-txt-key"]) : "cl.receipt.pubkey_pem",
+      },
+    };
+  }
+
+  // none
+  return {};
+}
+
 async function main() {
   const opts = parseArgs(process.argv);
 
@@ -150,22 +257,34 @@ async function main() {
     process.exit(1);
   }
 
+  const timeout = opts.timeout ? parseInt(opts.timeout, 10) : 30000;
+  const maxTokens = opts["max-tokens"] ? parseInt(opts["max-tokens"], 10) : 1000;
+
+  let verifyCfg = {};
+  try {
+    verifyCfg = buildVerifyConfig(opts);
+  } catch (e) {
+    console.error("\n❌ Error:", e?.message || String(e));
+    process.exit(1);
+  }
+
   const client = createClient({
     runtime: opts.runtime,
     actor: opts.actor,
+    timeout,
     verifyReceipts: !opts["no-verify"],
+    ...verifyCfg,
   });
 
-  const maxTokens = opts["max-tokens"] ? parseInt(opts["max-tokens"], 10) : 1000;
-
   try {
-    // Allow piping large content without shell quoting limits
-    const content = opts.stdin ? (await readStdin()).trimEnd() : opts.content;
+    // stdin can feed either content OR context depending on verb; we decide below
+    const stdinText = opts.stdin ? (await readStdin()).trimEnd() : null;
 
     let receipt;
 
     switch (verb) {
-      case "summarize":
+      case "summarize": {
+        const content = stdinText != null ? stdinText : opts.content;
         if (!content) throw new Error("--content required (or use --stdin)");
         receipt = await client.summarize({
           content,
@@ -174,62 +293,112 @@ async function main() {
           maxTokens,
         });
         break;
+      }
 
-      case "analyze":
+      case "analyze": {
+        const content = stdinText != null ? stdinText : opts.content;
         if (!content) throw new Error("--content required (or use --stdin)");
-        receipt = await client.analyze({
+        receipt = await client.analyze({ content, maxTokens });
+        break;
+      }
+
+      case "classify": {
+        const content = stdinText != null ? stdinText : opts.content;
+        if (!content) throw new Error("--content required (or use --stdin)");
+        receipt = await client.classify({ content, maxTokens });
+        break;
+      }
+
+      case "clean": {
+        const content = stdinText != null ? stdinText : opts.content;
+        if (!content) throw new Error("--content required (or use --stdin)");
+        receipt = await client.clean({
           content,
-          dimensions: commaList(opts.dimensions),
+          operations: commaList(opts.operations),
           maxTokens,
         });
         break;
+      }
 
-      case "classify":
-        if (!content) throw new Error("--content required (or use --stdin)");
-        receipt = await client.classify({
-          content,
-          categories: commaList(opts.categories),
-          maxTokens,
-        });
-        break;
-
-      case "clean":
-        if (!content) throw new Error("--content required (or use --stdin)");
-        receipt = await client.clean(content, maxTokens);
-        break;
-
-      case "convert":
+      case "convert": {
+        const content = stdinText != null ? stdinText : opts.content;
         if (!content) throw new Error("--content required (or use --stdin)");
         if (!opts.from) throw new Error("--from required");
         if (!opts.to) throw new Error("--to required");
-        receipt = await client.convert(content, opts.from, opts.to, maxTokens);
+        receipt = await client.convert({
+          content,
+          from: String(opts.from),
+          to: String(opts.to),
+          maxTokens,
+        });
         break;
+      }
 
-      case "describe":
+      case "describe": {
+        const subject = opts.subject ? String(opts.subject) : null;
+        if (!subject) throw new Error("--subject required");
+        const context = stdinText != null ? stdinText : (opts.context ? String(opts.context) : undefined);
+
+        receipt = await client.describe({
+          subject,
+          context,
+          detail_level: opts.detail ? String(opts.detail) : "medium",
+          audience: opts.audience ? String(opts.audience) : "general",
+          maxTokens,
+        });
+        break;
+      }
+
+      case "explain": {
+        const subject = opts.subject ? String(opts.subject) : null;
+        if (!subject) throw new Error("--subject required");
+        const context = stdinText != null ? stdinText : (opts.context ? String(opts.context) : undefined);
+
+        receipt = await client.explain({
+          subject,
+          context,
+          style: opts.style ? String(opts.style) : "step-by-step",
+          detail_level: opts.detail ? String(opts.detail) : "medium",
+          audience: opts.audience ? String(opts.audience) : "general",
+          maxTokens,
+        });
+        break;
+      }
+
+      case "format": {
+        const content = stdinText != null ? stdinText : opts.content;
         if (!content) throw new Error("--content required (or use --stdin)");
-        receipt = await client.describe(content, opts.detail || "medium", maxTokens);
+        const target = opts.target ? String(opts.target) : null;
+        if (!target) throw new Error("--target required (e.g. table|text)");
+        receipt = await client.format({ content, target_style: target, maxTokens });
         break;
+      }
 
-      case "explain":
+      case "parse": {
+        const content = stdinText != null ? stdinText : opts.content;
         if (!content) throw new Error("--content required (or use --stdin)");
-        receipt = await client.explain(content, opts.style || "step-by-step", maxTokens);
+        receipt = await client.parse({
+          content,
+          content_type: opts["content-type"] ? String(opts["content-type"]) : undefined,
+          mode: opts.mode ? String(opts.mode) : undefined,
+          target_schema: opts["target-schema"] ? String(opts["target-schema"]) : undefined,
+          maxTokens,
+        });
         break;
+      }
 
-      case "format":
-        if (!content) throw new Error("--content required (or use --stdin)");
-        if (!opts.to) throw new Error("--to required");
-        receipt = await client.format(content, opts.to, maxTokens);
+      case "fetch": {
+        const source = opts.source ? String(opts.source) : null;
+        if (!source) throw new Error("--source required (absolute URL)");
+        receipt = await client.fetch({
+          source,
+          mode: opts.mode ? String(opts.mode) : "text",
+          query: opts.query ? String(opts.query) : undefined,
+          include_metadata: !!opts["include-metadata"],
+          maxTokens,
+        });
         break;
-
-      case "parse":
-        if (!content) throw new Error("--content required (or use --stdin)");
-        receipt = await client.parse(content, null, maxTokens);
-        break;
-
-      case "fetch":
-        if (!opts.query) throw new Error("--query required");
-        receipt = await client.fetch(opts.query, opts.mode || "text", maxTokens);
-        break;
+      }
 
       default:
         throw new Error(`Verb "${verb}" not implemented`);
@@ -242,32 +411,31 @@ async function main() {
 
     // Human output
     console.log("\n📝 Result:");
-    console.log(JSON.stringify(receipt.result, null, 2));
+    console.log(JSON.stringify(receipt.result ?? receipt.error ?? null, null, 2));
 
     console.log("\n📋 Receipt:");
-    const rid = receipt?.metadata?.receipt_id || receipt?.receipt_id;
-    const ts = receipt?.metadata?.timestamp || receipt?.timestamp;
-    console.log(`  ID: ${rid || "n/a"}`);
-    console.log(`  Status: ${receipt.status || "n/a"}`);
-    console.log(`  Timestamp: ${ts || "n/a"}`);
+    const rid = receipt?.metadata?.receipt_id || "(none)";
+    const status = receipt?.status || "n/a";
+    const traceId = receipt?.trace?.trace_id || "(none)";
+    const duration = receipt?.trace?.duration_ms != null ? `${receipt.trace.duration_ms}ms` : "(n/a)";
+    console.log(`  ID: ${rid}`);
+    console.log(`  Status: ${status}`);
+    console.log(`  Trace: ${traceId} (${duration})`);
 
-    if (receipt?.trace?.trace_id) {
-      console.log(`  Trace ID: ${receipt.trace.trace_id}`);
-    }
-
-    if (receipt?.metadata?.proof) {
-      const proof = receipt.metadata.proof;
+    const proof = receipt?.metadata?.proof;
+    if (proof) {
       console.log("\n🔐 Proof:");
-      if (proof.hash_sha256) console.log(`  Hash: ${String(proof.hash_sha256).slice(0, 16)}...`);
+      if (proof.alg) console.log(`  Alg: ${proof.alg}`);
+      if (proof.canonical) console.log(`  Canonical: ${proof.canonical}`);
       if (proof.signer_id) console.log(`  Signer: ${proof.signer_id}`);
-      console.log("  ✅ Signature verified");
+      if (proof.hash_sha256) console.log(`  Hash: ${String(proof.hash_sha256).slice(0, 16)}...`);
+      console.log(`  Verify: ${opts["no-verify"] ? "skipped" : "ok (SDK verified)"}`);
     }
   } catch (err) {
     const error = err;
 
     console.error("\n❌ Error:", error?.message || String(error));
 
-    // SDK error shape
     if (error instanceof CommandLayerError || error?.statusCode || error?.details) {
       if (error.statusCode) console.error(`   Status: ${error.statusCode}`);
       if (error.details) console.error("   Details:", error.details);
@@ -275,7 +443,6 @@ async function main() {
 
     process.exit(1);
   } finally {
-    // best effort close
     try {
       if (typeof client?.close === "function") client.close();
     } catch {}
