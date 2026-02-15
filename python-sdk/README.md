@@ -4,13 +4,21 @@ Semantic verbs. Signed receipts. Deterministic verification.
 
 Official Python SDK for **CommandLayer Commons v1.0.0**.
 
+---
+
 ## Installation
 
 ```bash
 pip install commandlayer
 ```
 
-Python 3.10+ is supported.
+Python **3.10+** is supported.
+
+For local development:
+
+```bash
+pip install -e '.[dev]'
+```
 
 ---
 
@@ -33,48 +41,37 @@ print(receipt["status"])
 print(receipt["metadata"]["receipt_id"])
 ```
 
-> `verify_receipts` is **off by default** (matching TypeScript SDK behavior).
+> `verify_receipts` is **off by default** (matching the TypeScript SDK behavior).
 
 ---
 
 ## Client Configuration
 
 ```python
-client = create_client(
+from commandlayer import CommandLayerClient
+
+client = CommandLayerClient(
     runtime="https://runtime.commandlayer.org",
     actor="my-app",
     timeout_ms=30_000,
+    headers={"X-Trace-ID": "abc123"},
+    retries=1,
     verify_receipts=True,
     verify={
         "public_key": "ed25519:7Vkkmt6R02Iltp/+i3D5mraZyvLjfuTSVB33KwfzQC8=",
         # or ENS:
-        # "ens": {"name": "runtime.commandlayer.eth", "rpcUrl": "https://..."}
+        # "ens": {"name": "summarizeagent.eth", "rpcUrl": "https://..."},
     },
 )
 ```
 
 ### Verification options
-- `verify["public_key"]` (alias: `publicKey`): explicit Ed25519 pubkey (`ed25519:<base64>`, `<base64>`, `0x<hex>`, `<hex>`)
-- `verify["ens"]`: `{ "name": str, "rpcUrl"|"rpc_url": str, "pubkeyTextKey"|"pubkey_text_key"?: str }`
 
----
-
-## Supported Verbs
-
-All verbs return a signed receipt.
-
-```python
-client.summarize(content="...", style="bullet_points")
-client.analyze(content="...", goal="extract key risks")
-client.classify(content="...", max_labels=5)
-client.clean(content="...", operations=["trim", "normalize_newlines"])
-client.convert(content='{"a":1}', from_format="json", to_format="csv")
-client.describe(subject="x402 receipt", detail="medium")
-client.explain(subject="receipt verification", style="step-by-step")
-client.format(content="a: 1\nb: 2", to="table")
-client.parse(content='{"a":1}', content_type="json", mode="strict")
-client.fetch(source="https://example.com", include_metadata=True)
-```
+- `verify["public_key"]` (alias: `publicKey`): explicit Ed25519 pubkey
+  - accepted formats: `ed25519:<base64>`, `<base64>`, `0x<hex>`, `<hex>`
+- `verify["ens"]`: `{ "name": str, "rpcUrl"|"rpc_url": str }`
+  - resolves `cl.receipt.signer` on the agent ENS name
+  - resolves `cl.sig.pub` and `cl.sig.kid` on the signer ENS name
 
 ---
 
@@ -98,11 +95,29 @@ ENS-based verification:
 result = verify_receipt(
     receipt,
     ens={
-        "name": "runtime.commandlayer.eth",
+        "name": "summarizeagent.eth",
         "rpcUrl": "https://mainnet.infura.io/v3/YOUR_KEY",
-        "pubkeyTextKey": "cl.pubkey",
     },
 )
+```
+
+---
+
+## Supported Verbs
+
+All verbs return a signed receipt.
+
+```python
+client.summarize(content="...", style="bullet_points")
+client.analyze(content="...", goal="extract key risks")
+client.classify(content="...", max_labels=5)
+client.clean(content="...", operations=["trim", "normalize_newlines"])
+client.convert(content='{"a":1}', from_format="json", to_format="csv")
+client.describe(subject="x402 receipt", detail="medium")
+client.explain(subject="receipt verification", style="step-by-step")
+client.format(content="a: 1\nb: 2", to="table")
+client.parse(content='{"a":1}', content_type="json", mode="strict")
+client.fetch(source="https://example.com", include_metadata=True)
 ```
 
 ---
@@ -114,5 +129,17 @@ cd python-sdk
 python -m venv .venv
 source .venv/bin/activate
 pip install -e '.[dev]'
+ruff check .
+mypy commandlayer
 pytest
 ```
+
+---
+
+## Documentation
+
+See `docs/` for usage and API details:
+
+- `docs/getting-started.md`
+- `docs/client.md`
+- `docs/verification.md`
