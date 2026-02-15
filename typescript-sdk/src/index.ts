@@ -283,7 +283,7 @@ export function verifyEd25519SignatureOverUtf8HashString(
   pubkey32: Uint8Array
 ): boolean {
   if (pubkey32.length !== 32) throw new Error("ed25519: pubkey must be 32 bytes");
-  const msg = Buffer.from(hashHex, "utf8"); // IMPORTANT: hash is a hex string, signed as UTF-8
+  const msg = Buffer.from(hashHex, "utf8");
   const sig = b64ToBytes(signatureB64);
   if (sig.length !== 64) throw new Error("ed25519: signature must be 64 bytes");
   return nacl.sign.detached.verify(new Uint8Array(msg), sig, pubkey32);
@@ -314,17 +314,11 @@ export async function resolveEnsEd25519Pubkey(
 // -----------------------
 // Receipt verification (protocol-aligned)
 // -----------------------
-/**
- * Unsigned receipt rule (production-safe):
- * - remove derived fields: metadata.receipt_id, proof.hash_sha256, proof.signature_b64
- * - keep proof.alg, proof.canonical, proof.signer_id (these are part of what is attested)
- */
 export function toUnsignedReceipt(receipt: Receipt): any {
   if (!receipt || typeof receipt !== "object") throw new Error("receipt must be an object");
 
   const r: any = structuredClone(receipt);
 
-  // Remove derived fields
   if (r.metadata && typeof r.metadata === "object") {
     if ("receipt_id" in r.metadata) delete r.metadata.receipt_id;
 
@@ -338,16 +332,11 @@ export function toUnsignedReceipt(receipt: Receipt): any {
     }
   }
 
-  // If top-level receipt_id ever exists, remove it too
   if ("receipt_id" in r) delete r.receipt_id;
 
   return r;
 }
 
-/**
- * Recompute receipt hash:
- * sha256Hex( canonicalizeStableJsonV1( unsignedReceipt ) )
- */
 export function recomputeReceiptHashSha256(receipt: Receipt): { canonical: string; hash_sha256: string } {
   const unsigned = toUnsignedReceipt(receipt);
   const canonical = canonicalizeStableJsonV1(unsigned);
@@ -355,14 +344,6 @@ export function recomputeReceiptHashSha256(receipt: Receipt): { canonical: strin
   return { canonical, hash_sha256 };
 }
 
-/**
- * Verify a receipt:
- * - enforce proof.alg and proof.canonical
- * - recompute canonical hash over unsigned receipt
- * - compare to proof.hash_sha256
- * - enforce receipt_id == hash (metadata.receipt_id OR top-level receipt_id)
- * - verify Ed25519 signature over UTF-8 hash string using pubkey from explicit or ENS TXT
- */
 export async function verifyReceipt(receipt: Receipt, opts: VerifyOptions = {}): Promise<VerifyResult> {
   try {
     const proof: Proof = receipt?.metadata?.proof || {};
@@ -382,7 +363,6 @@ export async function verifyReceipt(receipt: Receipt, opts: VerifyOptions = {}):
     const receiptId = (receipt?.metadata?.receipt_id ?? (receipt as any)?.receipt_id ?? null) as string | null;
     const receiptIdMatches = claimedHash ? receiptId === claimedHash : false;
 
-    // Resolve pubkey
     let pubkey: Uint8Array | null = null;
     let pubkey_source: "explicit" | "ens" | null = null;
     let ens_error: string | null = null;
@@ -402,12 +382,12 @@ export async function verifyReceipt(receipt: Receipt, opts: VerifyOptions = {}):
       }
     }
 
-    // Signature check
     let signature_valid = false;
     let signature_error: string | null = null;
 
     if (!algMatches) signature_error = `proof.alg must be "ed25519-sha256" (got ${String(alg)})`;
-    else if (!canonicalMatches) signature_error = `proof.canonical must be "cl-stable-json-v1" (got ${String(canonical)})`;
+    else if (!canonicalMatches)
+      signature_error = `proof.canonical must be "cl-stable-json-v1" (got ${String(canonical)})`;
     else if (!claimedHash || !sigB64) signature_error = "missing proof.hash_sha256 or proof.signature_b64";
     else if (!pubkey) signature_error = ens_error || "no public key available (provide verify.publicKey or verify.ens)";
     else {
@@ -513,7 +493,6 @@ export class CommandLayerClient {
     }
   }
 
-  // ---- verb helpers
   async summarize(opts: { content: string; style?: string; format?: string; maxTokens?: number }) {
     return this.call("summarize", {
       input: {
@@ -634,7 +613,6 @@ export class CommandLayerClient {
     });
   }
 
-  // ---- raw call
   async call(verb: Verb, body: Record<string, any>): Promise<Receipt> {
     const url = `${this.runtime}/${verb}/v1.0.0`;
 
