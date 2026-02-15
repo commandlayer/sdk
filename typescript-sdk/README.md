@@ -118,9 +118,7 @@ Fastest method. No RPC required.
 import { verifyReceipt } from "@commandlayer/sdk";
 
 const result = await verifyReceipt(receipt, {
-  publicKeyPem: `-----BEGIN PUBLIC KEY-----
-MCowBQYDK2VwAyEA7Vkkmt6R02Iltp/+i3D5mraZyvLjfuTSVB33KwfzQC8=
------END PUBLIC KEY-----`
+  publicKey: "ed25519:7Vkkmt6R02Iltp/+i3D5mraZyvLjfuTSVB33KwfzQC8="
 });
 
 console.log(result.ok);
@@ -220,12 +218,14 @@ npm run build
 
 Expected output:
 
-- `dist/index.js`
+- `dist/index.cjs`
+- `dist/index.mjs`
+- `dist/cli.cjs`
 - `dist/index.d.ts`
 
 **Run**
 ```
-node bin/cli.js summarize --content "test" --style bullet_points --json
+node dist/cli.cjs summarize --content "test" --style bullet_points --json
 ```
 
 ***Global Link (Optional)**
@@ -271,7 +271,8 @@ Typical flow:
 cd typescript-sdk
 npm install
 npm run build
-node bin/cli.js summarize --content "test" --style bullet_points --json
+npm run test:cli-smoke
+node dist/cli.cjs summarize --content "test" --style bullet_points --json
 ```
 ---
 
