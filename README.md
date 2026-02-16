@@ -139,12 +139,63 @@ verifyReceipt(receipt, {
 
 ```ts
 verifyReceipt(receipt, {
-  ens: true,
-  rpcUrl: "https://mainnet.infura.io/v3/..."
+  ens: {
+    name: "runtime.commandlayer.eth",
+    rpcUrl: "https://mainnet.infura.io/v3/..."
+  }
 });
 ```
 
-This resolves the signer’s public key from ENS (`cl.receipt.pubkey_*` TXT record).
+ENS verification resolves signer material using this TXT record chain:
+
+- Agent/issuer ENS name TXT `cl.receipt.signer` => signer ENS name
+- Signer ENS name TXT `cl.sig.pub` and `cl.sig.kid` => Ed25519 public key metadata
+
+To verify receipts issued by the runtime signer, set `ens.name` to the issuer/agent name that contains `cl.receipt.signer`. If using `runtime.commandlayer.eth` as the agent name, set `cl.receipt.signer` on `runtime.commandlayer.eth` to point to itself.
+
+### Verification (Working Example)
+
+```ts
+import { createClient } from "@commandlayer/sdk";
+import { verifyReceipt } from "@commandlayer/sdk";
+
+const client = createClient({
+  actor: "my-app",
+  verifyReceipts: true,
+  verify: {
+    ens: {
+      name: "runtime.commandlayer.eth",
+      rpcUrl: process.env.MAINNET_RPC!
+    }
+  }
+});
+
+const receipt = await client.summarize({ content: "hello", style: "bullet_points" });
+// if verifyReceipts true, client methods should throw or return verify result depending on your design
+// also show direct call:
+const vr = await verifyReceipt(receipt, {
+  ens: { name: "runtime.commandlayer.eth", rpcUrl: process.env.MAINNET_RPC! }
+});
+console.log(vr.ok, vr.checks);
+```
+
+### ENS Setup
+
+For `runtime.commandlayer.eth` as the signer identity:
+
+- Existing TXT records on `runtime.commandlayer.eth`:
+  - `cl.sig.kid = v1`
+  - `cl.sig.pub = ed25519:CEHI9g4...`
+- Add one additional TXT record on `runtime.commandlayer.eth`:
+  - `cl.receipt.signer = runtime.commandlayer.eth`
+
+This makes `runtime.commandlayer.eth` self-describing for ENS verification, so the SDK can resolve `cl.receipt.signer` and then fetch `cl.sig.pub`/`cl.sig.kid` from the same name.
+
+Optional future pattern:
+
+- If each issuer/agent ENS name (for example, `summarizeagent.eth`) should verify through its own lookup, add:
+  - `cl.receipt.signer = runtime.commandlayer.eth`
+  on each issuer/agent ENS name, while keeping signing keys only on `runtime.commandlayer.eth`.
 
 ---
 

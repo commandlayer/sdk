@@ -15,7 +15,9 @@ import nacl from "tweetnacl";
  * Node-only. (Uses node:crypto). For browser support, swap sha256 to noble + conditional exports.
  */
 
-export const version = "1.0.0";
+export const commonsVersion = "1.0.0";
+/** @deprecated Use commonsVersion. */
+export const version = commonsVersion;
 
 // -----------------------
 // Types
