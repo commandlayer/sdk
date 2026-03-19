@@ -33,6 +33,12 @@ def test_valid_receipt_verifies() -> None:
     assert result["ok"] is True
 
 
+def test_valid_envelope_verifies() -> None:
+    receipt = load_fixture("receipt_valid.json")
+    result = verify_receipt({"receipt": receipt}, public_key=f"ed25519:{load_pubkey()}")
+    assert result["ok"] is True
+
+
 def test_invalid_signature_fails() -> None:
     receipt = load_fixture("receipt_invalid_sig.json")
     result = verify_receipt(receipt, public_key=f"ed25519:{load_pubkey()}")
@@ -59,10 +65,7 @@ def test_malformed_pubkey_fails() -> None:
 
 def test_wrong_kid_detected() -> None:
     receipt = load_fixture("receipt_wrong_kid.json")
-    assert receipt["kid"] != "v1"
     assert receipt["kid"] == "v2"
-
-    # Protocol-level key id policy check for SDK callers.
     with pytest.raises(ValueError, match="Unknown key id"):
         if receipt["kid"] != "v1":
             raise ValueError("Unknown key id")

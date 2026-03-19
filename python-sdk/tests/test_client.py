@@ -32,9 +32,14 @@ def test_client_posts_expected_payload() -> None:
         return httpx.Response(
             200,
             json={
-                "status": "success",
-                "x402": {"verb": "summarize"},
-                "metadata": {"proof": {"alg": "ed25519-sha256", "canonical": "cl-stable-json-v1"}},
+                "receipt": {
+                    "status": "success",
+                    "x402": {"verb": "summarize"},
+                    "metadata": {
+                        "proof": {"alg": "ed25519-sha256", "canonical": "cl-stable-json-v1"}
+                    },
+                },
+                "runtime_metadata": {"duration_ms": 12},
             },
         )
 
@@ -43,13 +48,15 @@ def test_client_posts_expected_payload() -> None:
         runtime="https://runtime.commandlayer.org", actor="tester", http_client=http
     )
 
-    client.summarize(content="hello", style="bullet_points")
+    response = client.summarize(content="hello", style="bullet_points")
 
-    assert captured["url"] == "https://runtime.commandlayer.org/summarize/v1.0.0"
+    assert captured["url"] == "https://runtime.commandlayer.org/summarize/v1.1.0"
     sent = captured["json"]
     assert isinstance(sent, dict)
     assert sent["actor"] == "tester"
     assert sent["x402"]["verb"] == "summarize"
+    assert response["receipt"]["status"] == "success"
+    assert response["runtime_metadata"]["duration_ms"] == 12
 
 
 def test_client_surfaces_error_message() -> None:
@@ -66,7 +73,9 @@ def test_client_surfaces_error_message() -> None:
 
 def test_client_verify_receipts_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     def handler(_: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json={"status": "success", "metadata": {"proof": {}}})
+        return httpx.Response(
+            200, json={"receipt": {"status": "success", "metadata": {"proof": {}}}}
+        )
 
     monkeypatch.setattr(
         "commandlayer.client.verify_receipt",

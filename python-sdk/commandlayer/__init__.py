@@ -1,10 +1,12 @@
 """CommandLayer Python SDK."""
 
-from .client import CommandLayerClient, create_client
+from .client import CommandLayerClient, create_client, normalize_command_response
 from .errors import CommandLayerError
 from .types import (
+    CanonicalReceipt,
+    CommandResponse,
     EnsVerifyOptions,
-    Receipt,
+    RuntimeMetadata,
     SignerKeyResolution,
     VerifyOptions,
     VerifyResult,
@@ -19,15 +21,18 @@ from .verify import (
 )
 
 __all__ = [
+    "CanonicalReceipt",
     "CommandLayerClient",
-    "create_client",
     "CommandLayerError",
+    "CommandResponse",
     "EnsVerifyOptions",
+    "RuntimeMetadata",
     "VerifyOptions",
     "SignerKeyResolution",
-    "Receipt",
     "VerifyResult",
     "canonicalize_stable_json_v1",
+    "create_client",
+    "normalize_command_response",
     "sha256_hex_utf8",
     "parse_ed25519_pubkey",
     "recompute_receipt_hash_sha256",
@@ -35,4 +40,4 @@ __all__ = [
     "verify_receipt",
 ]
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"

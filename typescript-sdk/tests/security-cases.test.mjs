@@ -8,24 +8,24 @@ const { verifyReceipt } = require("../dist/index.cjs");
 
 const publicKey = `ed25519:${loadTextFixture("public_key_base64.txt")}`;
 
-async function verifyReceiptStrict(receipt) {
-  if (receipt.issuer !== "parseagent.eth") {
-    throw new Error("Issuer mismatch");
-  }
-  return verifyReceipt(receipt, { publicKey });
-}
-
-test("fails if receipt.issuer mismatches ENS name", async () => {
+test("fails if caller-side issuer check mismatches expected agent", async () => {
   const receipt = loadFixture("receipt_valid.json");
   receipt.issuer = "evil.eth";
 
-  await assert.rejects(() => verifyReceiptStrict(receipt), /Issuer mismatch/);
+  await assert.rejects(
+    async () => {
+      if (receipt.issuer !== "parseagent.eth") {
+        throw new Error("Issuer mismatch");
+      }
+      await verifyReceipt(receipt, { publicKey });
+    },
+    /Issuer mismatch/
+  );
 });
 
-test("fails on tampered payload_hash", async () => {
+test("fails on tampered result payload", async () => {
   const receipt = loadFixture("receipt_valid.json");
-  receipt.payload_hash = "fakehash";
-
-  const result = await verifyReceiptStrict(receipt);
+  receipt.result.summary = "tampered";
+  const result = await verifyReceipt(receipt, { publicKey });
   assert.equal(result.ok, false);
 });

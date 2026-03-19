@@ -1,13 +1,15 @@
-name: Python SDK Tests
+name: Python SDK
 
 on:
   push:
     paths:
       - "python-sdk/**"
+      - "test_vectors/**"
       - ".github/workflows/python-sdk-tests.yml"
   pull_request:
     paths:
       - "python-sdk/**"
+      - "test_vectors/**"
       - ".github/workflows/python-sdk-tests.yml"
 
 jobs:
@@ -31,11 +33,17 @@ jobs:
       - name: Install dependencies
         run: pip install -e '.[dev]'
 
-      - name: Lint (ruff)
-        run: python -m ruff check commandlayer/
+      - name: Lint
+        run: python -m ruff check .
 
-      - name: Type check (mypy)
-        run: python -m mypy commandlayer/
+      - name: Type check
+        run: python -m mypy commandlayer
 
-      - name: Tests (pytest)
+      - name: Tests
         run: python -m pytest tests/ -v
+
+      - name: Build package
+        run: python -m build
+
+      - name: Twine check
+        run: python -m twine check dist/*

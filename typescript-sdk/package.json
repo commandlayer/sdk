@@ -1,6 +1,6 @@
 {
   "name": "@commandlayer/sdk",
-  "version": "0.1.0",
+  "version": "1.1.0",
   "private": false,
   "license": "MIT",
   "type": "module",
@@ -21,7 +21,7 @@
     "dist"
   ],
   "engines": {
-    "node": ">=22"
+    "node": ">=20"
   },
   "scripts": {
     "build": "tsup",
@@ -30,7 +30,7 @@
     "prepack": "npm run build",
     "test:cli-smoke": "node scripts/cli-smoke.mjs",
     "test:unit": "npm run build && node scripts/unit-tests.mjs && npm run test:template",
-    "test": "npm run test:unit && npm run test:cli-smoke",
+    "test": "npm run test:unit && npm run test:cli-smoke && node --test ../runtime/tests/*.mjs",
     "test:template": "node scripts/template-tests.mjs"
   },
   "dependencies": {

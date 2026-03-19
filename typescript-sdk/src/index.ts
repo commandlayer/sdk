@@ -1,74 +1,63 @@
-// typescript-sdk/src/index.ts
 import { createHash } from "node:crypto";
 import { ethers } from "ethers";
 import nacl from "tweetnacl";
 
-/**
- * CommandLayer TypeScript SDK — Commons v1.0.0
- *
- * Implements:
- * - Canonicalization: cl-stable-json-v1 (deterministic JSON w/ sorted keys, no whitespace)
- * - Hash recomputation: sha256 over canonicalized UNSIGNED receipt
- * - Signature verification: Ed25519 over the HASH STRING (utf8)
- * - ENS pubkey resolution: TXT lookup via ethers v6 resolver.getText()
- *
- * Node-only. (Uses node:crypto). For browser support, swap sha256 to noble + conditional exports.
- */
-
-export const commonsVersion = "1.0.0";
+export const commonsVersion = "1.1.0";
+export const agentCardsVersion = "1.1.0";
+export const packageVersion = "1.1.0";
 /** @deprecated Use commonsVersion. */
 export const version = commonsVersion;
 
-// -----------------------
-// Types
-// -----------------------
 export type Proof = {
-  alg?: string; // "ed25519-sha256"
-  canonical?: string; // "cl-stable-json-v1"
-  signer_id?: string; // e.g. runtime.commandlayer.eth
-  hash_sha256?: string; // hex
-  signature_b64?: string; // base64
-  [k: string]: any;
+  alg?: string;
+  canonical?: string;
+  signer_id?: string;
+  hash_sha256?: string;
+  signature_b64?: string;
+  [k: string]: unknown;
 };
 
 export type ReceiptMetadata = {
-  receipt_id?: string; // must equal proof.hash_sha256
+  receipt_id?: string;
   proof?: Proof;
-  actor?: { id: string; role?: string; [k: string]: any };
-  [k: string]: any;
+  actor?: { id: string; role?: string; [k: string]: unknown };
+  [k: string]: unknown;
 };
 
-export type ReceiptTrace = {
+export type CanonicalReceipt<T = unknown> = {
+  status: "success" | "error" | string;
+  x402?: {
+    verb?: string;
+    version?: string;
+    entry?: string;
+    tenant?: string;
+    extras?: Record<string, unknown>;
+    [k: string]: unknown;
+  };
+  result?: T;
+  error?: unknown;
+  metadata?: ReceiptMetadata;
+  [k: string]: unknown;
+};
+
+export type RuntimeMetadata = {
   trace_id?: string;
-  parent_trace_id?: string;
+  parent_trace_id?: string | null;
   started_at?: string;
   completed_at?: string;
   duration_ms?: number;
   provider?: string;
-  [k: string]: any;
+  runtime?: string;
+  request_id?: string;
+  [k: string]: unknown;
 };
 
-export type X402 = {
-  verb?: string;
-  version?: string;
-  entry?: string;
-  tenant?: string;
-  extras?: Record<string, any>;
-  [k: string]: any;
-};
-
-export type Receipt<T = any> = {
-  status: "success" | "error" | string;
-  x402?: X402;
-  trace?: ReceiptTrace;
-  result?: T;
-  error?: any;
-  metadata?: ReceiptMetadata;
-  [k: string]: any;
+export type CommandResponse<T = unknown> = {
+  receipt: CanonicalReceipt<T>;
+  runtime_metadata?: RuntimeMetadata;
 };
 
 export type VerifyChecks = {
-  schema_valid?: boolean; // not implemented here
   hash_matches: boolean;
   signature_valid: boolean;
   receipt_id_matches: boolean;
@@ -99,9 +88,9 @@ export type VerifyResult = {
 
 export class CommandLayerError extends Error {
   statusCode?: number;
-  details?: any;
+  details?: unknown;
 
-  constructor(message: string, statusCode?: number, details?: any) {
+  constructor(message: string, statusCode?: number, details?: unknown) {
     super(message);
     this.name = "CommandLayerError";
     this.statusCode = statusCode;
@@ -110,9 +99,7 @@ export class CommandLayerError extends Error {
 }
 
 export type EnsVerifyOptions = {
-  /** Agent ENS name that holds TXT records (e.g. summarizeagent.eth) */
   name: string;
-  /** Ethereum RPC URL (required for ENS resolution) */
   rpcUrl: string;
 };
 
@@ -123,36 +110,20 @@ export type SignerKeyResolution = {
 };
 
 export type VerifyOptions = {
-  /**
-   * Explicit Ed25519 public key (preferred).
-   * Accepts formats:
-   * - "ed25519:<base64>"
-   * - "<base64>" (32 bytes)
-   * - "0x<hex>" / "<hex>" (64 hex chars)
-   */
   publicKey?: string;
-  /** Resolve Ed25519 public key from ENS via TXT record. */
   ens?: EnsVerifyOptions;
 };
 
 export type ClientOptions = {
-  runtime?: string; // default https://runtime.commandlayer.org
-  actor?: string; // used by classify + helpful elsewhere
+  runtime?: string;
+  actor?: string;
   timeoutMs?: number;
   fetchImpl?: typeof fetch;
-
-  /**
-   * If true, every client call verifies the returned receipt.
-   * Requires either:
-   *  - opts.verify.publicKey, OR
-   *  - opts.verify.ens (with rpcUrl)
-   */
   verifyReceipts?: boolean;
-
-  /** Default verification config used when verifyReceipts is enabled */
   verify?: VerifyOptions;
 };
 
+const DEFAULT_RUNTIME = "https://runtime.commandlayer.org";
 const VERBS = [
   "summarize",
   "analyze",
@@ -168,64 +139,48 @@ const VERBS = [
 
 type Verb = (typeof VERBS)[number];
 
-// -----------------------
-// Helpers
-// -----------------------
+type LegacyBlendedReceipt = CanonicalReceipt & {
+  trace?: RuntimeMetadata;
+};
+
 function normalizeBase(url: string) {
   return String(url || "").replace(/\/+$/, "");
 }
 
-// -----------------------
-// Canonicalization: cl-stable-json-v1
-// -----------------------
 export function canonicalizeStableJsonV1(value: unknown): string {
   return encode(value);
 
   function encode(v: unknown): string {
     if (v === null) return "null";
-
     const t = typeof v;
-
     if (t === "string") return JSON.stringify(v);
     if (t === "boolean") return v ? "true" : "false";
-
     if (t === "number") {
-      if (!Number.isFinite(v)) {
-        throw new Error("canonicalize: non-finite number not allowed");
-      }
+      if (!Number.isFinite(v)) throw new Error("canonicalize: non-finite number not allowed");
       if (Object.is(v, -0)) return "0";
       return String(v);
     }
-
     if (t === "bigint") throw new Error("canonicalize: bigint not allowed");
     if (t === "undefined" || t === "function" || t === "symbol") {
       throw new Error(`canonicalize: unsupported type ${t}`);
     }
-
-    if (Array.isArray(v)) {
-      return "[" + v.map(encode).join(",") + "]";
-    }
-
+    if (Array.isArray(v)) return `[${v.map(encode).join(",")}]`;
     if (t === "object") {
       const obj = v as Record<string, unknown>;
       const keys = Object.keys(obj).sort();
-
       let out = "{";
-      for (let i = 0; i < keys.length; i++) {
-        const k = keys[i]!;
-        const val = obj[k];
-
+      for (let i = 0; i < keys.length; i += 1) {
+        const key = keys[i]!;
+        const val = obj[key];
         if (typeof val === "undefined") {
-          throw new Error(`canonicalize: undefined for key "${k}" not allowed`);
+          throw new Error(`canonicalize: undefined for key "${key}" not allowed`);
         }
-
         if (i) out += ",";
-        out += JSON.stringify(k) + ":" + encode(val);
+        out += JSON.stringify(key) + ":" + encode(val);
       }
       out += "}";
       return out;
     }
-
     throw new Error("canonicalize: unsupported value");
   }
 }
@@ -234,43 +189,28 @@ export function sha256HexUtf8(input: string): string {
   return createHash("sha256").update(Buffer.from(input, "utf8")).digest("hex");
 }
 
-// -----------------------
-// Ed25519 helpers (signs UTF-8 hash string)
-// -----------------------
 function b64ToBytes(b64: string): Uint8Array {
   const buf = Buffer.from(b64, "base64");
   return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
 }
 
 function hexToBytes(hex: string): Uint8Array {
-  const h = hex.startsWith("0x") ? hex.slice(2) : hex;
-  if (!/^[0-9a-fA-F]{64}$/.test(h)) {
+  const clean = hex.startsWith("0x") ? hex.slice(2) : hex;
+  if (!/^[0-9a-fA-F]{64}$/.test(clean)) {
     throw new Error("invalid hex (expected 64 hex chars for ed25519 pubkey)");
   }
-  const buf = Buffer.from(h, "hex");
+  const buf = Buffer.from(clean, "hex");
   return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
 }
 
-/**
- * Accepts:
- * - "ed25519:<base64>"
- * - "ed25519=<base64>"
- * - raw base64 (32 bytes)
- * - 0xhex / hex (64 hex chars => 32 bytes)
- */
 export function parseEd25519Pubkey(text: string): Uint8Array {
-  const s = String(text).trim();
-  const m = s.match(/^ed25519\s*[:=]\s*(.+)$/i);
-  const candidate = (m?.[1] ?? s).trim();
-
-  // hex path
+  const match = String(text).trim().match(/^ed25519\s*[:=]\s*(.+)$/i);
+  const candidate = (match?.[1] ?? text).trim();
   if (/^(0x)?[0-9a-fA-F]{64}$/.test(candidate)) {
     const pk = hexToBytes(candidate);
     if (pk.length !== 32) throw new Error("invalid ed25519 pubkey length");
     return pk;
   }
-
-  // base64 path
   const pk = b64ToBytes(candidate);
   if (pk.length !== 32) throw new Error("invalid base64 ed25519 pubkey length (need 32 bytes)");
   return pk;
@@ -288,100 +228,102 @@ export function verifyEd25519SignatureOverUtf8HashString(
   return nacl.sign.detached.verify(new Uint8Array(msg), sig, pubkey32);
 }
 
-// -----------------------
-// ENS TXT signer key resolution (ethers v6)
-// -----------------------
 export async function resolveSignerKey(name: string, rpcUrl: string): Promise<SignerKeyResolution> {
   const provider = new ethers.JsonRpcProvider(rpcUrl);
   const agentResolver = await provider.getResolver(name);
-  if (!agentResolver) {
-    throw new Error(`No resolver for agent ENS name: ${name}`);
-  }
+  if (!agentResolver) throw new Error(`No resolver for agent ENS name: ${name}`);
 
   const signerName = (await agentResolver.getText("cl.receipt.signer"))?.trim();
-  if (!signerName) {
-    throw new Error(`ENS TXT cl.receipt.signer missing for agent ENS name: ${name}`);
-  }
+  if (!signerName) throw new Error(`ENS TXT cl.receipt.signer missing for agent ENS name: ${name}`);
 
   const signerResolver = await provider.getResolver(signerName);
-  if (!signerResolver) {
-    throw new Error(`No resolver for signer ENS name: ${signerName}`);
-  }
+  if (!signerResolver) throw new Error(`No resolver for signer ENS name: ${signerName}`);
 
   const pubKeyText = (await signerResolver.getText("cl.sig.pub"))?.trim();
-  if (!pubKeyText) {
-    throw new Error(`ENS TXT cl.sig.pub missing for signer ENS name: ${signerName}`);
-  }
+  if (!pubKeyText) throw new Error(`ENS TXT cl.sig.pub missing for signer ENS name: ${signerName}`);
 
   const kid = (await signerResolver.getText("cl.sig.kid"))?.trim();
-  if (!kid) {
-    throw new Error(`ENS TXT cl.sig.kid missing for signer ENS name: ${signerName}`);
-  }
+  if (!kid) throw new Error(`ENS TXT cl.sig.kid missing for signer ENS name: ${signerName}`);
 
-  let rawPublicKeyBytes: Uint8Array;
   try {
-    rawPublicKeyBytes = parseEd25519Pubkey(pubKeyText);
-  } catch (e: any) {
-    throw new Error(`ENS TXT cl.sig.pub malformed for signer ENS name: ${signerName}. ${e?.message || String(e)}`);
+    return { algorithm: "ed25519", kid, rawPublicKeyBytes: parseEd25519Pubkey(pubKeyText) };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`ENS TXT cl.sig.pub malformed for signer ENS name: ${signerName}. ${message}`);
   }
-
-  return {
-    algorithm: "ed25519",
-    kid,
-    rawPublicKeyBytes
-  };
 }
 
-// -----------------------
-// Receipt verification (protocol-aligned)
-// -----------------------
-export function toUnsignedReceipt(receipt: Receipt): any {
+function extractReceipt(subject: CanonicalReceipt | CommandResponse | LegacyBlendedReceipt): CanonicalReceipt {
+  if (subject && typeof subject === "object" && "receipt" in subject && (subject as CommandResponse).receipt) {
+    return (subject as CommandResponse).receipt;
+  }
+  return subject as CanonicalReceipt;
+}
+
+export function normalizeCommandResponse<T = unknown>(payload: unknown): CommandResponse<T> {
+  if (!payload || typeof payload !== "object") {
+    throw new CommandLayerError("Runtime response must be a JSON object", 502, payload);
+  }
+
+  const candidate = payload as Record<string, unknown>;
+  if (candidate.receipt && typeof candidate.receipt === "object") {
+    const normalized: CommandResponse<T> = { receipt: candidate.receipt as CanonicalReceipt<T> };
+    if (candidate.runtime_metadata && typeof candidate.runtime_metadata === "object") {
+      normalized.runtime_metadata = candidate.runtime_metadata as RuntimeMetadata;
+    }
+    return normalized;
+  }
+
+  const legacy = payload as LegacyBlendedReceipt;
+  const runtime_metadata = legacy.trace && typeof legacy.trace === "object" ? legacy.trace : undefined;
+  const receipt = structuredClone(legacy) as LegacyBlendedReceipt;
+  delete receipt.trace;
+  const normalizedReceipt = receipt as CanonicalReceipt<T>;
+  return runtime_metadata ? { receipt: normalizedReceipt, runtime_metadata } : { receipt: normalizedReceipt };
+}
+
+export function toUnsignedReceipt(receiptLike: CanonicalReceipt | CommandResponse): CanonicalReceipt {
+  const receipt = extractReceipt(receiptLike);
   if (!receipt || typeof receipt !== "object") throw new Error("receipt must be an object");
 
-  const r: any = structuredClone(receipt);
-
-  if (r.metadata && typeof r.metadata === "object") {
-    if ("receipt_id" in r.metadata) delete r.metadata.receipt_id;
-
-    if (r.metadata.proof && typeof r.metadata.proof === "object") {
-      const p = r.metadata.proof;
-      const unsignedProof: any = {};
-      if (typeof p.alg === "string") unsignedProof.alg = p.alg;
-      if (typeof p.canonical === "string") unsignedProof.canonical = p.canonical;
-      if (typeof p.signer_id === "string") unsignedProof.signer_id = p.signer_id;
-      r.metadata.proof = unsignedProof;
+  const unsigned = structuredClone(receipt) as CanonicalReceipt;
+  if (unsigned.metadata && typeof unsigned.metadata === "object") {
+    delete unsigned.metadata.receipt_id;
+    if (unsigned.metadata.proof && typeof unsigned.metadata.proof === "object") {
+      const proof = unsigned.metadata.proof;
+      const unsignedProof: Proof = {};
+      if (typeof proof.alg === "string") unsignedProof.alg = proof.alg;
+      if (typeof proof.canonical === "string") unsignedProof.canonical = proof.canonical;
+      if (typeof proof.signer_id === "string") unsignedProof.signer_id = proof.signer_id;
+      unsigned.metadata.proof = unsignedProof;
     }
   }
-
-  if ("receipt_id" in r) delete r.receipt_id;
-
-  return r;
+  delete (unsigned as { receipt_id?: string }).receipt_id;
+  return unsigned;
 }
 
-export function recomputeReceiptHashSha256(receipt: Receipt): { canonical: string; hash_sha256: string } {
-  const unsigned = toUnsignedReceipt(receipt);
-  const canonical = canonicalizeStableJsonV1(unsigned);
-  const hash_sha256 = sha256HexUtf8(canonical);
-  return { canonical, hash_sha256 };
+export function recomputeReceiptHashSha256(receiptLike: CanonicalReceipt | CommandResponse) {
+  const canonical = canonicalizeStableJsonV1(toUnsignedReceipt(receiptLike));
+  return { canonical, hash_sha256: sha256HexUtf8(canonical) };
 }
 
-export async function verifyReceipt(receipt: Receipt, opts: VerifyOptions = {}): Promise<VerifyResult> {
+export async function verifyReceipt(
+  receiptLike: CanonicalReceipt | CommandResponse,
+  opts: VerifyOptions = {}
+): Promise<VerifyResult> {
   try {
-    const proof: Proof = receipt?.metadata?.proof || {};
+    const receipt = extractReceipt(receiptLike);
+    const proof: Proof = (receipt.metadata?.proof as Proof) || {};
     const claimedHash = typeof proof.hash_sha256 === "string" ? proof.hash_sha256 : null;
-    const sigB64 = typeof proof.signature_b64 === "string" ? proof.signature_b64 : null;
-
+    const signatureB64 = typeof proof.signature_b64 === "string" ? proof.signature_b64 : null;
     const alg = typeof proof.alg === "string" ? proof.alg : null;
     const canonical = typeof proof.canonical === "string" ? proof.canonical : null;
     const signer_id = typeof proof.signer_id === "string" ? proof.signer_id : null;
-
     const algMatches = alg === "ed25519-sha256";
     const canonicalMatches = canonical === "cl-stable-json-v1";
-
     const { hash_sha256: recomputedHash } = recomputeReceiptHashSha256(receipt);
     const hashMatches = claimedHash ? recomputedHash === claimedHash : false;
-
-    const receiptId = (receipt?.metadata?.receipt_id ?? (receipt as any)?.receipt_id ?? null) as string | null;
+    const receiptId = typeof receipt.metadata?.receipt_id === "string" ? receipt.metadata.receipt_id : null;
     const receiptIdMatches = claimedHash ? receiptId === claimedHash : false;
 
     let pubkey: Uint8Array | null = null;
@@ -398,32 +340,27 @@ export async function verifyReceipt(receipt: Receipt, opts: VerifyOptions = {}):
         const signerKey = await resolveSignerKey(opts.ens.name, opts.ens.rpcUrl);
         pubkey = signerKey.rawPublicKeyBytes;
         pubkey_source = "ens";
-      } catch (e: any) {
-        ens_error = e?.message || "ENS signer key resolution failed";
+      } catch (error) {
+        ens_error = error instanceof Error ? error.message : String(error);
       }
     }
 
     let signature_valid = false;
     let signature_error: string | null = null;
-
     if (!algMatches) signature_error = `proof.alg must be "ed25519-sha256" (got ${String(alg)})`;
-    else if (!canonicalMatches)
-      signature_error = `proof.canonical must be "cl-stable-json-v1" (got ${String(canonical)})`;
-    else if (!claimedHash || !sigB64) signature_error = "missing proof.hash_sha256 or proof.signature_b64";
-    else if (!pubkey) signature_error = ens_error || "no public key available (provide verify.publicKey or verify.ens)";
+    else if (!canonicalMatches) signature_error = `proof.canonical must be "cl-stable-json-v1" (got ${String(canonical)})`;
+    else if (!claimedHash || !signatureB64) signature_error = "missing proof.hash_sha256 or proof.signature_b64";
+    else if (!pubkey) signature_error = ens_error || "no public key available (provide publicKey or ens)";
     else {
       try {
-        signature_valid = verifyEd25519SignatureOverUtf8HashString(claimedHash, sigB64, pubkey);
-      } catch (e: any) {
-        signature_valid = false;
-        signature_error = e?.message || "signature verify failed";
+        signature_valid = verifyEd25519SignatureOverUtf8HashString(claimedHash, signatureB64, pubkey);
+      } catch (error) {
+        signature_error = error instanceof Error ? error.message : String(error);
       }
     }
 
-    const ok = algMatches && canonicalMatches && hashMatches && receiptIdMatches && signature_valid;
-
     return {
-      ok,
+      ok: algMatches && canonicalMatches && hashMatches && receiptIdMatches && signature_valid,
       checks: {
         hash_matches: hashMatches,
         signature_valid,
@@ -432,7 +369,7 @@ export async function verifyReceipt(receipt: Receipt, opts: VerifyOptions = {}):
         canonical_matches: canonicalMatches
       },
       values: {
-        verb: receipt?.x402?.verb ?? null,
+        verb: typeof receipt.x402?.verb === "string" ? receipt.x402.verb : null,
         signer_id,
         alg,
         canonical,
@@ -448,7 +385,8 @@ export async function verifyReceipt(receipt: Receipt, opts: VerifyOptions = {}):
         verify_error: null
       }
     };
-  } catch (e: any) {
+  } catch (error) {
+    const receipt = extractReceipt(receiptLike as CanonicalReceipt | CommandResponse);
     return {
       ok: false,
       checks: {
@@ -459,56 +397,49 @@ export async function verifyReceipt(receipt: Receipt, opts: VerifyOptions = {}):
         canonical_matches: false
       },
       values: {
-        verb: receipt?.x402?.verb ?? null,
-        signer_id: receipt?.metadata?.proof?.signer_id ?? null,
-        alg: receipt?.metadata?.proof?.alg ?? null,
-        canonical: receipt?.metadata?.proof?.canonical ?? null,
-        claimed_hash: receipt?.metadata?.proof?.hash_sha256 ?? null,
+        verb: typeof receipt?.x402?.verb === "string" ? receipt.x402.verb : null,
+        signer_id: typeof receipt?.metadata?.proof?.signer_id === "string" ? receipt.metadata.proof.signer_id : null,
+        alg: typeof receipt?.metadata?.proof?.alg === "string" ? receipt.metadata.proof.alg : null,
+        canonical: typeof receipt?.metadata?.proof?.canonical === "string" ? receipt.metadata.proof.canonical : null,
+        claimed_hash: typeof receipt?.metadata?.proof?.hash_sha256 === "string" ? receipt.metadata.proof.hash_sha256 : null,
         recomputed_hash: null,
-        receipt_id: receipt?.metadata?.receipt_id ?? null,
+        receipt_id: typeof receipt?.metadata?.receipt_id === "string" ? receipt.metadata.receipt_id : null,
         pubkey_source: null,
         ens_txt_key: null
       },
       errors: {
         signature_error: null,
         ens_error: null,
-        verify_error: e?.message || String(e)
+        verify_error: error instanceof Error ? error.message : String(error)
       }
     };
   }
 }
 
-// -----------------------
-// Client
-// -----------------------
 export class CommandLayerClient {
   runtime: string;
   actor: string;
   timeoutMs: number;
   fetchImpl: typeof fetch;
-
-  // default OFF unless explicitly enabled
   verifyReceipts: boolean;
   verifyDefaults?: VerifyOptions;
 
   constructor(opts: ClientOptions = {}) {
-    this.runtime = normalizeBase(opts.runtime || "https://runtime.commandlayer.org");
+    this.runtime = normalizeBase(opts.runtime || DEFAULT_RUNTIME);
     this.actor = opts.actor || "sdk-user";
     this.timeoutMs = opts.timeoutMs ?? 30_000;
     this.fetchImpl = opts.fetchImpl || fetch;
-
     this.verifyReceipts = opts.verifyReceipts === true;
     this.verifyDefaults = opts.verify;
   }
 
   private ensureVerifyConfigIfEnabled() {
     if (!this.verifyReceipts) return;
-    const v = this.verifyDefaults;
-    const hasExplicit = !!(v?.publicKey && String(v.publicKey).trim().length);
-    const hasEns = !!(v?.ens?.name && v?.ens?.rpcUrl);
+    const hasExplicit = !!this.verifyDefaults?.publicKey?.trim();
+    const hasEns = !!(this.verifyDefaults?.ens?.name && this.verifyDefaults?.ens?.rpcUrl);
     if (!hasExplicit && !hasEns) {
       throw new CommandLayerError(
-        "verifyReceipts is enabled but no verification key config provided. Set: verify.publicKey OR verify.ens { name, rpcUrl }.",
+        "verifyReceipts is enabled but no verification key config provided. Set verify.publicKey or verify.ens { name, rpcUrl }.",
         400
       );
     }
@@ -516,11 +447,7 @@ export class CommandLayerClient {
 
   async summarize(opts: { content: string; style?: string; format?: string; maxTokens?: number }) {
     return this.call("summarize", {
-      input: {
-        content: opts.content,
-        summary_style: opts.style,
-        format_hint: opts.format
-      },
+      input: { content: opts.content, summary_style: opts.style, format_hint: opts.format },
       limits: { max_output_tokens: opts.maxTokens ?? 1000 }
     });
   }
@@ -538,19 +465,13 @@ export class CommandLayerClient {
     return this.call("classify", {
       actor: this.actor,
       input: { content: opts.content },
-      limits: {
-        max_labels: opts.maxLabels ?? 5,
-        max_output_tokens: opts.maxTokens ?? 1000
-      }
+      limits: { max_labels: opts.maxLabels ?? 5, max_output_tokens: opts.maxTokens ?? 1000 }
     });
   }
 
   async clean(opts: { content: string; operations?: string[]; maxTokens?: number }) {
     return this.call("clean", {
-      input: {
-        content: opts.content,
-        operations: opts.operations ?? ["normalize_newlines", "collapse_whitespace", "trim"]
-      },
+      input: { content: opts.content, operations: opts.operations ?? ["normalize_newlines", "collapse_whitespace", "trim"] },
       limits: { max_output_tokens: opts.maxTokens ?? 1000 }
     });
   }
@@ -562,34 +483,17 @@ export class CommandLayerClient {
     });
   }
 
-  async describe(opts: {
-    subject: string;
-    audience?: string;
-    detail?: "short" | "medium" | "detailed";
-    maxTokens?: number;
-  }) {
-    const subject = (opts.subject || "").slice(0, 140);
+  async describe(opts: { subject: string; audience?: string; detail?: "short" | "medium" | "detailed"; maxTokens?: number }) {
     return this.call("describe", {
-      input: {
-        subject,
-        audience: opts.audience ?? "general",
-        detail_level: opts.detail ?? "medium"
-      },
+      input: { subject: (opts.subject || "").slice(0, 140), audience: opts.audience ?? "general", detail_level: opts.detail ?? "medium" },
       limits: { max_output_tokens: opts.maxTokens ?? 1000 }
     });
   }
 
-  async explain(opts: {
-    subject: string;
-    audience?: string;
-    style?: string;
-    detail?: "short" | "medium" | "detailed";
-    maxTokens?: number;
-  }) {
-    const subject = (opts.subject || "").slice(0, 140);
+  async explain(opts: { subject: string; audience?: string; style?: string; detail?: "short" | "medium" | "detailed"; maxTokens?: number }) {
     return this.call("explain", {
       input: {
-        subject,
+        subject: (opts.subject || "").slice(0, 140),
         audience: opts.audience ?? "general",
         style: opts.style ?? "step-by-step",
         detail_level: opts.detail ?? "medium"
@@ -605,13 +509,7 @@ export class CommandLayerClient {
     });
   }
 
-  async parse(opts: {
-    content: string;
-    contentType?: "json" | "yaml" | "text";
-    mode?: "best_effort" | "strict";
-    targetSchema?: string;
-    maxTokens?: number;
-  }) {
+  async parse(opts: { content: string; contentType?: "json" | "yaml" | "text"; mode?: "best_effort" | "strict"; targetSchema?: string; maxTokens?: number }) {
     return this.call("parse", {
       input: {
         content: opts.content,
@@ -634,21 +532,12 @@ export class CommandLayerClient {
     });
   }
 
-  async call(verb: Verb, body: Record<string, any>): Promise<Receipt> {
-    if (!VERBS.includes(verb as any)) {
-      throw new CommandLayerError(`Unsupported verb: ${verb}`, 400);
-    }
-
-    const url = `${this.runtime}/${verb}/v1.0.0`;
-
+  async call(verb: Verb, body: Record<string, unknown>): Promise<CommandResponse> {
+    if (!VERBS.includes(verb)) throw new CommandLayerError(`Unsupported verb: ${verb}`, 400);
     this.ensureVerifyConfigIfEnabled();
 
     const payload = {
-      x402: {
-        verb,
-        version: "1.0.0",
-        entry: `x402://${verb}agent.eth/${verb}/v1.0.0`
-      },
+      x402: { verb, version: commonsVersion, entry: `x402://${verb}agent.eth/${verb}/v${commonsVersion}` },
       ...(body.actor ? { actor: body.actor } : { actor: this.actor }),
       ...body
     };
@@ -657,54 +546,42 @@ export class CommandLayerClient {
     const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
 
     try {
-      const resp = await this.fetchImpl(url, {
+      const response = await this.fetchImpl(`${this.runtime}/${verb}/v${commonsVersion}`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "User-Agent": `commandlayer-js/${version}`
-        },
+        headers: { "Content-Type": "application/json", "User-Agent": `commandlayer-js/${packageVersion}` },
         body: JSON.stringify(payload),
         signal: controller.signal
       });
 
-      let data: any;
+      let data: unknown;
       try {
-        data = await resp.json();
+        data = await response.json();
       } catch {
-        if (!resp.ok) {
-          throw new CommandLayerError(`HTTP ${resp.status} (non-JSON response)`, resp.status);
-        }
-        throw new CommandLayerError("Runtime returned non-JSON response", resp.status);
+        if (!response.ok) throw new CommandLayerError(`HTTP ${response.status} (non-JSON response)`, response.status);
+        throw new CommandLayerError("Runtime returned non-JSON response", response.status);
       }
 
-      if (!resp.ok) {
-        throw new CommandLayerError(
-          data?.message || data?.error?.message || `HTTP ${resp.status}`,
-          resp.status,
-          data
-        );
+      if (!response.ok) {
+        const detail = data as Record<string, any>;
+        throw new CommandLayerError(detail?.message || detail?.error?.message || `HTTP ${response.status}`, response.status, data);
       }
 
+      const normalized = normalizeCommandResponse(data);
       if (this.verifyReceipts) {
-        const v = await verifyReceipt(data as Receipt, this.verifyDefaults || {});
-        if (!v.ok) {
-          throw new CommandLayerError("Receipt verification failed", 422, v);
-        }
+        const verified = await verifyReceipt(normalized.receipt, this.verifyDefaults || {});
+        if (!verified.ok) throw new CommandLayerError("Receipt verification failed", 422, verified);
       }
-
-      return data as Receipt;
-    } catch (err: any) {
-      if (err?.name === "AbortError") throw new CommandLayerError("Request timed out", 408);
-      if (err instanceof CommandLayerError) throw err;
-      throw new CommandLayerError(err?.message || String(err));
+      return normalized;
+    } catch (error) {
+      if ((error as { name?: string })?.name === "AbortError") throw new CommandLayerError("Request timed out", 408);
+      if (error instanceof CommandLayerError) throw error;
+      throw new CommandLayerError(error instanceof Error ? error.message : String(error));
     } finally {
       clearTimeout(timeoutId);
     }
   }
 
-  close() {
-    // no-op
-  }
+  close() {}
 }
 
 export function createClient(opts: ClientOptions = {}) {
