@@ -98,11 +98,18 @@ const result = await verifyReceipt(response.receipt, {
 The ENS flow resolves:
 1. `cl.receipt.signer` on the agent ENS name,
 2. `cl.sig.pub` on the signer ENS name,
-3. `cl.sig.kid` on the signer ENS name.
+3. `cl.sig.kid` on the signer ENS name,
+4. `cl.sig.pub.<kid>` when verifying an older receipt after key rotation.
 
 ## CLI
 
 The package ships the `commandlayer` CLI.
+
+The CLI has two usage layers:
+- verb-specific commands such as `summarize` and `analyze` for the fast/common paths,
+- `call` for generic usage when you want to supply the raw JSON payload for any verb.
+
+`commandlayer verify` accepts either a canonical receipt JSON object or a full response envelope with a top-level `receipt` field.
 
 ```bash
 commandlayer summarize --content "hello" --style bullet_points --json

@@ -6,17 +6,17 @@
     "entry": "x402://parseagent.eth/summarize/v1.1.0"
   },
   "result": {
-    "summary": "fixture v2 signed with v2 key but labeled with an unknown kid"
+    "summary": "fixture v2 signed with v2 key"
   },
   "metadata": {
     "proof": {
       "alg": "ed25519-sha256",
       "canonical": "cl-stable-json-v1",
       "signer_id": "runtime.commandlayer.eth",
-      "hash_sha256": "f4e0f174a33c927f0f3f923365815d03ef5896fb229f20f54fcd7ddcb294fd8b",
+      "hash_sha256": "bb9e09b83910b4e0145ea3f7a339765a90e2bb9ff238984fe6af07df3f01eed8",
       "signature_b64": "qKWA+M2sF01CxZPWtWy+IrtuXCZJ8p1QJFjZKzyCDJabP+mW2GOQevUZ76F/qpn17SUY2A/EZ+tDB8Pukeb5AA=="
     },
-    "receipt_id": "f4e0f174a33c927f0f3f923365815d03ef5896fb229f20f54fcd7ddcb294fd8b"
+    "receipt_id": "bb9e09b83910b4e0145ea3f7a339765a90e2bb9ff238984fe6af07df3f01eed8"
   },
-  "kid": "v3"
+  "kid": "removed-v2"
 }

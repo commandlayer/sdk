@@ -26,7 +26,7 @@ function runCase(name, args, expected) {
 
 runCase("help output", ["--help"], {
   exitCode: 0,
-  includes: ["Usage: commandlayer", "CommandLayer CLI for calling Commons verbs and verifying signed receipts"]
+  includes: ["Usage: commandlayer", "verb-specific commands for fast common usage", "verify for receipts/envelopes"]
 });
 
 runCase("argument validation", ["summarize"], {

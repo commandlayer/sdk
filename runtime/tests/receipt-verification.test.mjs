@@ -1,38 +1,32 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
-import { loadFixture, loadTextFixture } from "../../typescript-sdk/tests/helpers.mjs";
+import { installMockEns, loadFixture, loadTextFixture } from "../../typescript-sdk/tests/helpers.mjs";
+
+installMockEns();
 
 const require = createRequire(import.meta.url);
 const { verifyReceipt } = require("../../typescript-sdk/dist/index.cjs");
 
 const publicKey = `ed25519:${loadTextFixture("public_key_base64.txt")}`;
 
-async function verifyReceiptWithKid(receipt) {
-  if (receipt.kid && receipt.kid !== "v1") {
-    return { valid: false, error: "Unknown key id" };
-  }
-  const result = await verifyReceipt(receipt, { publicKey });
-  return {
-    valid: result.ok,
-    error: result.errors.signature_error ?? result.errors.verify_error ?? ""
-  };
-}
-
 test("valid receipt verifies", async () => {
   const receipt = loadFixture("receipt_valid.json");
-  const result = await verifyReceiptWithKid(receipt);
-  assert.equal(result.valid, true);
+  const result = await verifyReceipt(receipt, { publicKey });
+  assert.equal(result.ok, true);
 });
 
 test("invalid signature fails", async () => {
   const receipt = loadFixture("receipt_invalid_sig.json");
-  const result = await verifyReceiptWithKid(receipt);
-  assert.equal(result.valid, false);
+  const result = await verifyReceipt(receipt, { publicKey });
+  assert.equal(result.ok, false);
 });
 
-test("wrong kid fails", async () => {
+test("wrong kid fails when ENS cannot route to a matching key", async () => {
   const receipt = loadFixture("receipt_wrong_kid.json");
-  const result = await verifyReceiptWithKid(receipt);
-  assert.match(result.error, /Unknown key id/);
+  const result = await verifyReceipt(receipt, {
+    ens: { name: "rotatingagent.eth", rpcUrl: "http://mock-rpc.local" }
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.errors.signature_error ?? "", /unknown key id/i);
 });

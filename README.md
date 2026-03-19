@@ -147,7 +147,8 @@ const result = await verifyReceipt(response.receipt, {
 ENS signer discovery resolves:
 1. `cl.receipt.signer` on the agent ENS name,
 2. `cl.sig.pub` on the signer ENS name,
-3. `cl.sig.kid` on the signer ENS name.
+3. `cl.sig.kid` on the signer ENS name,
+4. `cl.sig.pub.<kid>` on the signer ENS name when verifying an older receipt after key rotation.
 
 ## CLI
 
@@ -158,13 +159,21 @@ commandlayer summarize --content "Test text" --style bullet_points --json
 commandlayer verify --file receipt.json --public-key "ed25519:BASE64_PUBLIC_KEY"
 ```
 
+The TypeScript SDK includes the `commandlayer` CLI. The Python SDK does not include a CLI.
+
+Python users should either:
+- use the TypeScript CLI for smoke tests, demos, and CI workflows, or
+- use the Python API directly inside Python applications and scripts.
+
 The CLI is intended for demos, CI smoke tests, debugging, and reproducing SDK flows without writing app code.
 
 ## Repo guide
 
 - Fast onboarding: `QUICKSTART.md`
 - Cookbook examples: `EXAMPLES.md`
-- Maintainer / architecture notes: `DEVELOPER_EXPERIENCE.md`
-- Build, release, and publish flow: `DEPLOYMENT_GUIDE.md`
+- Contributor workflow: `CONTRIBUTING.md`
+- Maintainer / release operations: `MAINTAINER_GUIDE.md`
+- Build, release, and publish flow: `RELEASE_GUIDE.md`
+- Versioning policy: `VERSIONING.md`
 - TypeScript package docs: `typescript-sdk/README.md`
 - Python package docs: `python-sdk/README.md`

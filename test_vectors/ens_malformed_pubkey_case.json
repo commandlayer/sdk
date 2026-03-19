@@ -1,0 +1,6 @@
+{
+  "scenario": "signer ENS TXT record cl.sig.pub is present but malformed base64",
+  "agent_name": "malformed.eth",
+  "signer_name": "malformed-signer.eth",
+  "expected_error": "cl.sig.pub malformed"
+}

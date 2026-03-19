@@ -124,7 +124,8 @@ const response = await client.explain({
 
 ```ts
 const response = await client.format({
-  content: "a: 1\nb: 2",
+  content: "a: 1
+b: 2",
   to: "table"
 });
 ```
@@ -162,7 +163,8 @@ cleaned = client.clean(content="   test@example.com  ", operations=["trim", "red
 converted = client.convert(content='{"a":1}', from_format="json", to_format="csv")
 description = client.describe(subject="receipt verification")
 explanation = client.explain(subject="receipt verification", style="step-by-step")
-formatted = client.format(content="a: 1\nb: 2", to="table")
+formatted = client.format(content="a: 1
+b: 2", to="table")
 parsed = client.parse(content='{ "a": 1 }', content_type="json", mode="strict")
 fetched = client.fetch(source="https://example.com", include_metadata=True)
 ```
@@ -207,30 +209,36 @@ result = verify_receipt(
 
 ## 5. CLI examples
 
+The CLI has two usage layers:
+- verb-specific commands such as `summarize` and `analyze` for the fast, common paths,
+- `call` for generic or less common verbs when you want to provide the raw JSON body yourself.
+
 ### Summarize
 
 ```bash
-commandlayer summarize \
-  --content "CommandLayer defines semantic verbs." \
-  --style bullet_points \
-  --json
+commandlayer summarize   --content "CommandLayer defines semantic verbs."   --style bullet_points   --json
 ```
 
 ### Analyze
 
 ```bash
-commandlayer analyze \
-  --content "Invoice total: $500" \
-  --goal "detect finance intent" \
-  --json
+commandlayer analyze   --content "Invoice total: $500"   --goal "detect finance intent"   --json
+```
+
+### Generic call
+
+```bash
+commandlayer call   --verb classify   --body '{"content":"Contact support@example.com"}'   --json
 ```
 
 ### Verify a saved receipt
 
+`commandlayer verify` accepts either:
+- a canonical receipt JSON object, or
+- a full response envelope JSON object with a top-level `receipt` field.
+
 ```bash
-commandlayer verify \
-  --file receipt.json \
-  --public-key "ed25519:BASE64_PUBLIC_KEY"
+commandlayer verify   --file receipt.json   --public-key "ed25519:BASE64_PUBLIC_KEY"
 ```
 
 ## 6. Runtime override

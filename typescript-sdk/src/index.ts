@@ -228,7 +228,7 @@ export function verifyEd25519SignatureOverUtf8HashString(
   return nacl.sign.detached.verify(new Uint8Array(msg), sig, pubkey32);
 }
 
-export async function resolveSignerKey(name: string, rpcUrl: string): Promise<SignerKeyResolution> {
+export async function resolveSignerKey(name: string, rpcUrl: string, requestedKid?: string | null): Promise<SignerKeyResolution> {
   const provider = new ethers.JsonRpcProvider(rpcUrl);
   const agentResolver = await provider.getResolver(name);
   if (!agentResolver) throw new Error(`No resolver for agent ENS name: ${name}`);
@@ -239,17 +239,29 @@ export async function resolveSignerKey(name: string, rpcUrl: string): Promise<Si
   const signerResolver = await provider.getResolver(signerName);
   if (!signerResolver) throw new Error(`No resolver for signer ENS name: ${signerName}`);
 
-  const pubKeyText = (await signerResolver.getText("cl.sig.pub"))?.trim();
-  if (!pubKeyText) throw new Error(`ENS TXT cl.sig.pub missing for signer ENS name: ${signerName}`);
+  const currentKid = (await signerResolver.getText("cl.sig.kid"))?.trim();
+  if (!currentKid) throw new Error(`ENS TXT cl.sig.kid missing for signer ENS name: ${signerName}`);
 
-  const kid = (await signerResolver.getText("cl.sig.kid"))?.trim();
-  if (!kid) throw new Error(`ENS TXT cl.sig.kid missing for signer ENS name: ${signerName}`);
+  const currentPubKeyText = (await signerResolver.getText("cl.sig.pub"))?.trim();
+  if (!currentPubKeyText) throw new Error(`ENS TXT cl.sig.pub missing for signer ENS name: ${signerName}`);
+
+  const effectiveKid = requestedKid?.trim() || currentKid;
+  let pubKeyText = currentPubKeyText;
+  let pubKeyRecord = "cl.sig.pub";
+
+  if (effectiveKid !== currentKid) {
+    pubKeyRecord = `cl.sig.pub.${effectiveKid}`;
+    pubKeyText = (await signerResolver.getText(pubKeyRecord))?.trim() || "";
+    if (!pubKeyText) {
+      throw new Error(`ENS unknown key id for signer ENS name: ${signerName}: ${effectiveKid}`);
+    }
+  }
 
   try {
-    return { algorithm: "ed25519", kid, rawPublicKeyBytes: parseEd25519Pubkey(pubKeyText) };
+    return { algorithm: "ed25519", kid: effectiveKid, rawPublicKeyBytes: parseEd25519Pubkey(pubKeyText) };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`ENS TXT cl.sig.pub malformed for signer ENS name: ${signerName}. ${message}`);
+    throw new Error(`ENS TXT ${pubKeyRecord} malformed for signer ENS name: ${signerName}. ${message}`);
   }
 }
 
@@ -337,7 +349,7 @@ export async function verifyReceipt(
     } else if (opts.ens) {
       ens_txt_key = "cl.receipt.signer -> cl.sig.pub, cl.sig.kid";
       try {
-        const signerKey = await resolveSignerKey(opts.ens.name, opts.ens.rpcUrl);
+        const signerKey = await resolveSignerKey(opts.ens.name, opts.ens.rpcUrl, typeof receipt.kid === "string" ? receipt.kid : null);
         pubkey = signerKey.rawPublicKeyBytes;
         pubkey_source = "ens";
       } catch (error) {

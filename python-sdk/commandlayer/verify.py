@@ -125,6 +125,7 @@ def verify_ed25519_signature_over_utf8_hash_string(
 def resolve_signer_key(
     name: str,
     rpc_url: str,
+    requested_kid: str | None = None,
     *,
     resolver: EnsTextResolver | None = None,
 ) -> SignerKeyResolution:
@@ -134,21 +135,31 @@ def resolve_signer_key(
     signer_name = txt_resolver.get_text(name, "cl.receipt.signer")
     if not signer_name:
         raise ValueError(f"ENS TXT cl.receipt.signer missing for agent ENS name: {name}")
-    pub_key_text = txt_resolver.get_text(signer_name, "cl.sig.pub")
-    if not pub_key_text:
-        raise ValueError(f"ENS TXT cl.sig.pub missing for signer ENS name: {signer_name}")
-    kid = txt_resolver.get_text(signer_name, "cl.sig.kid")
-    if not kid:
+    current_kid = txt_resolver.get_text(signer_name, "cl.sig.kid")
+    if not current_kid:
         raise ValueError(f"ENS TXT cl.sig.kid missing for signer ENS name: {signer_name}")
+    current_pub_key_text = txt_resolver.get_text(signer_name, "cl.sig.pub")
+    if not current_pub_key_text:
+        raise ValueError(f"ENS TXT cl.sig.pub missing for signer ENS name: {signer_name}")
+
+    effective_kid = (requested_kid or "").strip() or current_kid
+    pub_key_text = current_pub_key_text
+    pub_key_record = "cl.sig.pub"
+    if effective_kid != current_kid:
+        pub_key_record = f"cl.sig.pub.{effective_kid}"
+        pub_key_text = txt_resolver.get_text(signer_name, pub_key_record)
+        if not pub_key_text:
+            raise ValueError(f"ENS unknown key id for signer ENS name: {signer_name}: {effective_kid}")
+
     try:
         raw_public_key_bytes = parse_ed25519_pubkey(pub_key_text)
     except ValueError as err:
         raise ValueError(
-            f"ENS TXT cl.sig.pub malformed for signer ENS name: {signer_name}. {err}"
+            f"ENS TXT {pub_key_record} malformed for signer ENS name: {signer_name}. {err}"
         ) from err
     return SignerKeyResolution(
         algorithm="ed25519",
-        kid=kid,
+        kid=effective_kid,
         raw_public_key_bytes=raw_public_key_bytes,
     )
 
@@ -232,7 +243,11 @@ def verify_receipt(
                 ens_error = "ens.name is required"
             else:
                 try:
-                    signer_key = resolve_signer_key(ens_name, _extract_rpc_url(ens))
+                    signer_key = resolve_signer_key(
+                        ens_name,
+                        _extract_rpc_url(ens),
+                        target.get("kid") if isinstance(target, dict) and isinstance(target.get("kid"), str) else None,
+                    )
                     pubkey = signer_key.raw_public_key_bytes
                     pubkey_source = "ens"
                 except Exception as err:  # noqa: BLE001

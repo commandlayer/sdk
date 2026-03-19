@@ -10,7 +10,7 @@ function parseIntSafe(value: string, fallback: number): number {
 const program = new Command();
 program
   .name("commandlayer")
-  .description("CommandLayer CLI for calling Commons verbs and verifying signed receipts")
+  .description("CommandLayer CLI: verb-specific commands for fast common usage, plus call for generic JSON requests, and verify for receipts/envelopes")
   .option("--runtime <url>", "CommandLayer runtime base URL", "https://runtime.commandlayer.org")
   .option("--actor <id>", "Actor id used in requests", "sdk-cli")
   .option("--timeout-ms <ms>", "Request timeout in milliseconds", "30000")
@@ -60,12 +60,12 @@ withCommonOptions(program.command("analyze").description("Analyze content").opti
   printCommandResponse(response, !!program.opts().json);
 });
 
-program.command("call").description("Call a verb with a raw JSON payload").requiredOption("--verb <verb>", "Verb name").requiredOption("--body <json>", "Request body JSON").action(async (opts) => {
+program.command("call").description("Generic command for any verb when the verb-specific commands are too narrow").requiredOption("--verb <verb>", "Verb name").requiredOption("--body <json>", "Request body JSON").action(async (opts) => {
   const response = await createConfiguredClient().call(opts.verb, JSON.parse(opts.body) as Record<string, unknown>);
   printCommandResponse(response, !!program.opts().json);
 });
 
-program.command("verify").description("Verify a saved receipt or response envelope").requiredOption("--file <path>", "Path to receipt JSON file").option("--public-key <key>", "Explicit Ed25519 public key").option("--ens-name <name>", "ENS name that publishes cl.receipt.signer").option("--rpc-url <url>", "RPC URL for ENS lookups").action(async (opts) => {
+program.command("verify").description("Verify a canonical receipt JSON object or a full response envelope with a top-level receipt field").requiredOption("--file <path>", "Path to receipt or response envelope JSON file").option("--public-key <key>", "Explicit Ed25519 public key").option("--ens-name <name>", "ENS name that publishes cl.receipt.signer").option("--rpc-url <url>", "RPC URL for ENS lookups").action(async (opts) => {
   const fs = await import("node:fs/promises");
   const raw = JSON.parse(await fs.readFile(opts.file, "utf8")) as Record<string, unknown>;
   const result = await verifyReceipt(raw as any, {

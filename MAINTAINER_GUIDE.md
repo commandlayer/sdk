@@ -1,6 +1,6 @@
-# Developer Experience Guide
+# Maintainer Guide
 
-This document is for maintainers and advanced integrators. Start with `README.md` or `QUICKSTART.md` if you are adopting the SDK.
+This document is for maintainers changing SDK internals, fixtures, CI, or release mechanics. It is not for application developers using the SDK in their own projects; use `README.md`, `QUICKSTART.md`, or the package READMEs instead.
 
 ## Product rules this repo now enforces
 
@@ -15,7 +15,7 @@ This document is for maintainers and advanced integrators. Start with `README.md
 - `python-sdk/`: PyPI package and Python verification helpers.
 - `test_vectors/`: shared receipt fixtures used across SDKs.
 - `runtime/tests/`: cross-SDK protocol checks run against the built TypeScript package.
-- root docs: public landing page, quickstart, examples, and release guide.
+- root docs: public landing page, quickstart, examples, contributor guide, versioning policy, and release guide.
 
 ## Shared protocol model
 
@@ -40,8 +40,8 @@ Clients normalize runtime responses into:
 
 ```json
 {
-  "receipt": { ...canonical signed receipt... },
-  "runtime_metadata": { ...optional unsigned context... }
+  "receipt": { "...": "canonical signed receipt" },
+  "runtime_metadata": { "...": "optional unsigned context" }
 }
 ```
 
@@ -66,17 +66,31 @@ Both SDKs use the same verification contract:
 3. recompute `sha256`,
 4. compare against `metadata.proof.hash_sha256`,
 5. verify the Ed25519 signature over the UTF-8 hash string,
-6. optionally discover the signing key via ENS.
+6. resolve signer keys via ENS when an explicit key is not provided,
+7. when a receipt carries `kid`, prefer the matching `cl.sig.pub.<kid>` record so older receipts still verify after key rotation.
 
 ## CLI rules
 
-The npm package owns the primary `commandlayer` CLI.
+The npm package owns the only supported `commandlayer` CLI. The Python package does not ship a CLI.
 
 The CLI should remain:
 - installable with `npm install -g @commandlayer/sdk`,
 - aligned with SDK examples,
 - useful for CI smoke tests,
-- capable of verifying saved receipts.
+- capable of verifying saved receipts or full response envelopes.
+
+## Test execution and ordering
+
+`runtime/tests` import `typescript-sdk/dist/index.cjs`, so a fresh clone must build the TypeScript SDK before running runtime tests.
+
+Use the root scripts to avoid hidden ordering requirements:
+
+```bash
+npm install
+npm run test:full
+```
+
+`npm run test:full` runs the TypeScript install/build/tests, then the runtime tests against the built output.
 
 ## Maintenance checklist
 
@@ -85,4 +99,4 @@ When protocol versions change:
 2. update root docs and per-package READMEs,
 3. regenerate or update shared fixtures,
 4. run both SDK test suites plus `runtime/tests`,
-5. confirm release instructions in `DEPLOYMENT_GUIDE.md` still match reality.
+5. confirm release automation and `RELEASE_GUIDE.md` still match reality.

@@ -20,11 +20,26 @@ export function loadTextFixture(name) {
   return fs.readFileSync(fixturePath, "utf8").trim();
 }
 
-const pub = loadTextFixture("public_key_base64.txt");
+const currentPub = loadTextFixture("public_key_base64.txt");
+const rotatedPubV1 = loadTextFixture("public_key_v1_base64.txt");
+const rotatedPubV2 = loadTextFixture("public_key_v2_base64.txt");
 
 export const ensFixtures = {
   "parseagent.eth": { "cl.receipt.signer": "runtime.commandlayer.eth" },
-  "runtime.commandlayer.eth": { "cl.sig.pub": `ed25519:${pub}`, "cl.sig.kid": "v1" },
+  "runtime.commandlayer.eth": { "cl.sig.pub": `ed25519:${currentPub}`, "cl.sig.kid": "v1" },
+  "rotatingagent.eth": { "cl.receipt.signer": "rotating-runtime.commandlayer.eth" },
+  "rotating-runtime.commandlayer.eth": {
+    "cl.sig.pub": `ed25519:${rotatedPubV2}`,
+    "cl.sig.kid": "v2",
+    "cl.sig.pub.v1": `ed25519:${rotatedPubV1}`,
+    "cl.sig.pub.v2": `ed25519:${rotatedPubV2}`
+  },
+  "removed-agent.eth": { "cl.receipt.signer": "removed-runtime.commandlayer.eth" },
+  "removed-runtime.commandlayer.eth": {
+    "cl.sig.pub": `ed25519:${rotatedPubV2}`,
+    "cl.sig.kid": "v2",
+    "cl.sig.pub.v2": `ed25519:${rotatedPubV2}`
+  },
   "invalidagent.eth": {},
   "bad-signer.eth": { "cl.receipt.signer": "missing-pub.eth" },
   "missing-pub.eth": { "cl.sig.kid": "v1" },

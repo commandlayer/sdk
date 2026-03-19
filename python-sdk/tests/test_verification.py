@@ -23,25 +23,25 @@ def load_fixture(name: str) -> dict:
     return json.loads((VECTORS / name).read_text(encoding="utf-8"))
 
 
-def load_pubkey() -> str:
-    return (VECTORS / "public_key_base64.txt").read_text(encoding="utf-8").strip()
+def load_text(name: str) -> str:
+    return (VECTORS / name).read_text(encoding="utf-8").strip()
 
 
 def test_valid_receipt_verifies() -> None:
     receipt = load_fixture("receipt_valid.json")
-    result = verify_receipt(receipt, public_key=f"ed25519:{load_pubkey()}")
+    result = verify_receipt(receipt, public_key=f"ed25519:{load_text('public_key_base64.txt')}")
     assert result["ok"] is True
 
 
 def test_valid_envelope_verifies() -> None:
     receipt = load_fixture("receipt_valid.json")
-    result = verify_receipt({"receipt": receipt}, public_key=f"ed25519:{load_pubkey()}")
+    result = verify_receipt({"receipt": receipt}, public_key=f"ed25519:{load_text('public_key_base64.txt')}")
     assert result["ok"] is True
 
 
 def test_invalid_signature_fails() -> None:
     receipt = load_fixture("receipt_invalid_sig.json")
-    result = verify_receipt(receipt, public_key=f"ed25519:{load_pubkey()}")
+    result = verify_receipt(receipt, public_key=f"ed25519:{load_text('public_key_base64.txt')}")
     assert result["ok"] is False
 
 
@@ -64,12 +64,24 @@ def test_malformed_pubkey_fails() -> None:
 
 
 def test_wrong_kid_detected() -> None:
+    resolver = FakeResolver(
+        {
+            ("rotatingagent.eth", "cl.receipt.signer"): "rotating-runtime.commandlayer.eth",
+            ("rotating-runtime.commandlayer.eth", "cl.sig.pub"): f"ed25519:{load_text('public_key_v2_base64.txt')}",
+            ("rotating-runtime.commandlayer.eth", "cl.sig.kid"): "v2",
+            ("rotating-runtime.commandlayer.eth", "cl.sig.pub.v1"): f"ed25519:{load_text('public_key_v1_base64.txt')}",
+            ("rotating-runtime.commandlayer.eth", "cl.sig.pub.v2"): f"ed25519:{load_text('public_key_v2_base64.txt')}",
+        }
+    )
     receipt = load_fixture("receipt_wrong_kid.json")
-    assert receipt["kid"] == "v2"
-    with pytest.raises(ValueError, match="Unknown key id"):
-        if receipt["kid"] != "v1":
-            raise ValueError("Unknown key id")
+    with pytest.raises(ValueError, match="unknown key id"):
+        resolve_signer_key(
+            "rotatingagent.eth",
+            "https://rpc.example",
+            receipt["kid"],
+            resolver=resolver,
+        )
 
 
 def test_parse_pubkey_fixture_length() -> None:
-    assert len(parse_ed25519_pubkey(f"ed25519:{load_pubkey()}")) == 32
+    assert len(parse_ed25519_pubkey(f"ed25519:{load_text('public_key_base64.txt')}")) == 32

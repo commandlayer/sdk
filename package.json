@@ -1,0 +1,10 @@
+{
+  "name": "commandlayer-sdk-repo",
+  "private": true,
+  "version": "1.1.0",
+  "scripts": {
+    "build": "npm --prefix typescript-sdk run build",
+    "test": "npm --prefix typescript-sdk run test",
+    "test:full": "npm --prefix typescript-sdk ci && npm --prefix typescript-sdk run build && node --test runtime/tests/*.mjs"
+  }
+}
