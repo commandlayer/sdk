@@ -13,8 +13,7 @@
 - Improved verification flow alignment with runtime
 
 ### Fixed
-- Packaging metadata now exposes repository changelog and project URLs
-- TypeScript package declares Node type definitions explicitly for clean installs
+- No additional fixes recorded in this release note.
 
 ### Notes
 - Protocol-Commons v1.1.0 is the current supported line

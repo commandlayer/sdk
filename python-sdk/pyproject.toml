@@ -44,6 +44,8 @@ Homepage = "https://github.com/commandlayer/sdk"
 Repository = "https://github.com/commandlayer/sdk"
 Documentation = "https://github.com/commandlayer/sdk#readme"
 Changelog = "https://github.com/commandlayer/sdk/blob/main/CHANGELOG.md"
+Issues = "https://github.com/commandlayer/sdk/issues"
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["commandlayer*"]
