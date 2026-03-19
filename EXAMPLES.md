@@ -1,247 +1,213 @@
-# CommandLayer SDK — Examples (Spec-Ready)
+# CommandLayer SDK Examples
 
-This document provides canonical, implementation-aligned examples for:
+Canonical examples for the CommandLayer SDK repo.
 
-- All Commons verbs
-- Receipt structure
-- Verification flows
-- CLI usage
-- cURL reproduction
-- Multi-step orchestration
-- Error handling
+All examples in this file target:
+- Protocol-Commons v1.1.0,
+- canonical signed receipts returned as `response.receipt`, and
+- optional execution context returned as `response.runtime_metadata`.
 
-All examples target:
-
-```
-API Version: v1.0.0
-Canonical Runtime: https://runtime.commandlayer.org
-Schema Host: https://www.commandlayer.org
-```
-
----
-
-# 1. Receipt Structure (Canonical Reference)
-
-Every successful SDK call returns a receipt shaped as:
+## 1. Canonical response envelope
 
 ```json
 {
-  "status": "success",
-  "x402": {
-    "verb": "summarize",
-    "version": "1.0.0",
-    "entry": "x402://summarizeagent.eth/summarize/v1.0.0"
-  },
-  "trace": {
-    "trace_id": "trace_abc123",
-    "parent_trace_id": null,
-    "started_at": "2026-02-15T02:30:00.000Z",
-    "completed_at": "2026-02-15T02:30:00.120Z",
-    "duration_ms": 120,
-    "provider": "runtime"
-  },
-  "result": { ... },
-  "metadata": {
-    "proof": {
-      "alg": "ed25519-sha256",
-      "canonical": "cl-stable-json-v1",
-      "signer_id": "runtime.commandlayer.eth",
-      "hash_sha256": "abc...",
-      "signature_b64": "xyz..."
+  "receipt": {
+    "status": "success",
+    "x402": {
+      "verb": "summarize",
+      "version": "1.1.0",
+      "entry": "x402://summarizeagent.eth/summarize/v1.1.0"
     },
-    "receipt_id": "abc..."
+    "result": {
+      "summary": "..."
+    },
+    "metadata": {
+      "receipt_id": "...",
+      "proof": {
+        "alg": "ed25519-sha256",
+        "canonical": "cl-stable-json-v1",
+        "signer_id": "runtime.commandlayer.eth",
+        "hash_sha256": "...",
+        "signature_b64": "..."
+      }
+    }
+  },
+  "runtime_metadata": {
+    "trace_id": "trace_abc123",
+    "duration_ms": 120,
+    "provider": "runtime.commandlayer.org"
   }
 }
 ```
 
-Verification requires:
+## 2. TypeScript examples
 
-- Canonical JSON reconstruction
-- SHA-256 hash match
-- Ed25519 signature verification
-
----
-
-# 2. TypeScript SDK Examples
-
-## 2.1 Create Client
+### Create client
 
 ```ts
 import { createClient } from "@commandlayer/sdk";
 
 const client = createClient({
-  runtime: "https://runtime.commandlayer.org",
-  verifyReceipts: false
+  actor: "examples-ts",
+  runtime: "https://runtime.commandlayer.org"
 });
 ```
 
----
-
-## 2.2 Summarize
+### Summarize
 
 ```ts
-const receipt = await client.summarize({
+const response = await client.summarize({
   content: "CommandLayer defines semantic agent verbs.",
   style: "bullet_points"
 });
 
-console.log(receipt.result.summary);
+console.log(response.receipt.result?.summary);
 ```
 
-Expected `result`:
-
-```json
-{
-  "summary": "CommandLayer defines semantic agent verbs.",
-  "format": "text",
-  "compression_ratio": 1.0,
-  "source_hash": "..."
-}
-```
-
----
-
-## 2.3 Analyze
+### Analyze
 
 ```ts
-const receipt = await client.analyze({
-  input: "Invoice total: $1200",
+const response = await client.analyze({
+  content: "Invoice total: $1200",
   goal: "detect finance intent"
 });
 ```
 
-Expected result:
-
-```json
-{
-  "summary": "...",
-  "insights": [...],
-  "labels": ["finance"],
-  "score": 0.25
-}
-```
-
----
-
-## 2.4 Classify
+### Classify
 
 ```ts
-const receipt = await client.classify({
-  actor: "tenant_1",
-  input: {
-    content: "Contact support@example.com"
+const response = await client.classify({
+  content: "Contact support@example.com"
+});
+```
+
+### Clean
+
+```ts
+const response = await client.clean({
+  content: "   test@example.com  ",
+  operations: ["trim", "redact_emails"]
+});
+```
+
+### Convert
+
+```ts
+const response = await client.convert({
+  content: '{"a":1}',
+  from: "json",
+  to: "csv"
+});
+```
+
+### Describe
+
+```ts
+const response = await client.describe({
+  subject: "receipt verification",
+  audience: "general",
+  detail: "medium"
+});
+```
+
+### Explain
+
+```ts
+const response = await client.explain({
+  subject: "receipt verification",
+  audience: "novice",
+  style: "step-by-step"
+});
+```
+
+### Format
+
+```ts
+const response = await client.format({
+  content: "a: 1\nb: 2",
+  to: "table"
+});
+```
+
+### Parse
+
+```ts
+const response = await client.parse({
+  content: '{ "a": 1 }',
+  contentType: "json",
+  mode: "strict"
+});
+```
+
+### Fetch
+
+```ts
+const response = await client.fetch({
+  source: "https://example.com",
+  include_metadata: true
+});
+```
+
+## 3. Python examples
+
+```python
+from commandlayer import create_client
+
+client = create_client(actor="examples-py")
+
+summary = client.summarize(content="CommandLayer defines semantic agent verbs.", style="bullet_points")
+analysis = client.analyze(content="Invoice total: $1200", goal="detect finance intent")
+classification = client.classify(content="Contact support@example.com")
+cleaned = client.clean(content="   test@example.com  ", operations=["trim", "redact_emails"])
+converted = client.convert(content='{"a":1}', from_format="json", to_format="csv")
+description = client.describe(subject="receipt verification")
+explanation = client.explain(subject="receipt verification", style="step-by-step")
+formatted = client.format(content="a: 1\nb: 2", to="table")
+parsed = client.parse(content='{ "a": 1 }', content_type="json", mode="strict")
+fetched = client.fetch(source="https://example.com", include_metadata=True)
+```
+
+## 4. Verification examples
+
+### TypeScript, explicit key
+
+```ts
+import { verifyReceipt } from "@commandlayer/sdk";
+
+const result = await verifyReceipt(response.receipt, {
+  publicKey: "ed25519:BASE64_PUBLIC_KEY"
+});
+```
+
+### Python, explicit key
+
+```python
+from commandlayer import verify_receipt
+
+result = verify_receipt(response["receipt"], public_key="ed25519:BASE64_PUBLIC_KEY")
+```
+
+### ENS-backed verification
+
+```ts
+const result = await verifyReceipt(response.receipt, {
+  ens: {
+    name: "summarizeagent.eth",
+    rpcUrl: process.env.MAINNET_RPC_URL!
   }
 });
 ```
 
-Expected result:
-
-```json
-{
-  "labels": ["contains_emails"],
-  "scores": [0.5],
-  "taxonomy": ["root", "contains_emails"]
-}
+```python
+result = verify_receipt(
+    response["receipt"],
+    ens={"name": "summarizeagent.eth", "rpcUrl": "https://mainnet.infura.io/v3/YOUR_KEY"},
+)
 ```
 
----
+## 5. CLI examples
 
-## 2.5 Fetch
-
-```ts
-const receipt = await client.fetch({
-  source: "https://example.com"
-});
-```
-
-Expected result:
-
-```json
-{
-  "items": [
-    {
-      "source": "https://example.com",
-      "ok": true,
-      "http_status": 200,
-      "body_preview": "<!doctype html>...",
-      "truncated": false
-    }
-  ]
-}
-```
-
----
-
-## 2.6 Convert
-
-```ts
-const receipt = await client.convert({
-  input: {
-    content: "{\"a\":1}",
-    source_format: "json",
-    target_format: "csv"
-  }
-});
-```
-
----
-
-## 2.7 Explain
-
-```ts
-await client.explain({
-  input: {
-    subject: "Receipt verification",
-    audience: "novice",
-    style: "step-by-step"
-  }
-});
-```
-
----
-
-## 2.8 Parse
-
-```ts
-await client.parse({
-  input: {
-    content: "{ \"a\": 1 }",
-    content_type: "json"
-  }
-});
-```
-
----
-
-## 2.9 Clean
-
-```ts
-await client.clean({
-  input: {
-    content: "   test@example.com  ",
-    operations: ["trim", "redact_emails"]
-  }
-});
-```
-
----
-
-## 2.10 Format
-
-```ts
-await client.format({
-  input: {
-    content: "a: 1\nb: 2",
-    target_style: "table"
-  }
-});
-```
-
----
-
-# 3. CLI Examples
-
-## 3.1 Basic
+### Summarize
 
 ```bash
 commandlayer summarize \
@@ -250,183 +216,81 @@ commandlayer summarize \
   --json
 ```
 
----
-
-## 3.2 Pipe Input
-
-```bash
-cat file.txt | commandlayer summarize --stdin --json
-```
-
----
-
-## 3.3 Analyze
+### Analyze
 
 ```bash
 commandlayer analyze \
   --content "Invoice total: $500" \
-  --dimensions sentiment
+  --goal "detect finance intent" \
+  --json
 ```
 
----
-
-# 4. cURL Reproduction
-
-Each receipt should include a `curl` block (if exposed by orchestration).
-
-Example:
+### Verify a saved receipt
 
 ```bash
-curl -X POST https://runtime.commandlayer.org/summarize/v1.0.0 \
-  -H "Content-Type: application/json" \
-  -d '{
-    "x402": {
-      "verb": "summarize",
-      "version": "1.0.0"
-    },
-    "input": {
-      "content": "Test text"
-    }
-  }'
+commandlayer verify \
+  --file receipt.json \
+  --public-key "ed25519:BASE64_PUBLIC_KEY"
 ```
 
----
+## 6. Runtime override
 
-# 5. Multi-Step Orchestration Example
-
-## Flow: Fetch → Summarize → Explain
+### TypeScript
 
 ```ts
-const step1 = await client.fetch({ source: "https://example.com" });
-
-const step2 = await client.summarize({
-  content: step1.result.items[0].body_preview
+const client = createClient({
+  actor: "override-example",
+  runtime: "https://staging-runtime.commandlayer.org"
 });
+```
 
-const step3 = await client.explain({
-  input: {
-    subject: "Example site summary",
-    context: step2.result.summary
+### Python
+
+```python
+client = create_client(
+    actor="override-example",
+    runtime="https://staging-runtime.commandlayer.org",
+)
+```
+
+## 7. Persist the canonical receipt
+
+```ts
+import { writeFile } from "node:fs/promises";
+
+await writeFile("receipt.json", JSON.stringify(response.receipt, null, 2));
+```
+
+```python
+import json
+from pathlib import Path
+
+Path("receipt.json").write_text(json.dumps(response["receipt"], indent=2), encoding="utf-8")
+```
+
+## 8. Error handling
+
+### TypeScript
+
+```ts
+import { CommandLayerError } from "@commandlayer/sdk";
+
+try {
+  await client.summarize({ content: "" });
+} catch (error) {
+  if (error instanceof CommandLayerError) {
+    console.error(error.statusCode, error.message, error.details);
   }
-});
-```
-
-Each step yields independent receipts.
-
----
-
-# 6. Receipt Verification (Offline)
-
-```ts
-import { verifyReceipt } from "@commandlayer/sdk";
-
-const ok = await verifyReceipt(receipt, {
-  publicKey: "-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----"
-});
-
-console.log(ok);
-```
-
-Verification steps:
-
-1. Reconstruct unsigned receipt
-2. Stable JSON stringify
-3. SHA-256 hash
-4. Compare with `metadata.proof.hash_sha256`
-5. Verify Ed25519 signature
-
----
-
-# 7. Receipt Verification (ENS)
-
-```ts
-await verifyReceipt(receipt, {
-  ens: true,
-  rpcUrl: "https://mainnet.infura.io/v3/..."
-});
-```
-
-Resolution flow:
-
-- Fetch ENS resolver
-- Read `cl.receipt.pubkey_*`
-- Convert to PEM if required
-- Verify signature
-
----
-
-# 8. Error Example
-
-```json
-{
-  "status": "error",
-  "x402": { "verb": "summarize", "version": "1.0.0" },
-  "trace": {...},
-  "error": {
-    "code": "INTERNAL_ERROR",
-    "message": "summarize.input.content required",
-    "retryable": false
-  },
-  "metadata": { ... }
 }
 ```
 
-SDK should throw structured errors mirroring receipt shape.
+### Python
 
----
+```python
+from commandlayer import CommandLayerError
 
-# 9. Schema Validation Example
-
-To validate receipt schema:
-
-```ts
-await verifyReceipt(receipt, {
-  schema: true
-});
+try:
+    client.summarize(content="")
+except CommandLayerError as error:
+    print(error.status_code, error, error.details)
 ```
-
-If schema validator not warmed:
-
-- SDK should either:
-  - Compile schema
-  - Or return controlled error
-
-Never silently ignore invalid schema.
-
----
-
-# 10. Deterministic Hash Example
-
-Unsigned receipt canonicalization:
-
-```ts
-const unsigned = structuredClone(receipt);
-unsigned.metadata.proof.hash_sha256 = "";
-unsigned.metadata.proof.signature_b64 = "";
-unsigned.metadata.receipt_id = "";
-
-const canonical = stableStringify(unsigned);
-const hash = sha256(canonical);
-```
-
-Hash must equal:
-
-```
-receipt.metadata.proof.hash_sha256
-```
-
----
-
-# 11. Definition of Spec Compliance
-
-An SDK implementation is compliant if:
-
-- All verbs map to `/verb/v1.0.0`
-- Receipt canonicalization matches runtime
-- Verification passes against runtime receipts
-- Errors match receipt schema
-- CLI and SDK produce identical receipt structures
-
----
-
-

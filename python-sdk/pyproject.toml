@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "commandlayer"
-version = "1.0.0"
+version = "1.1.0"
 description = "CommandLayer Python SDK — semantic verbs, signed receipts, and verification helpers."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "CommandLayer", email = "security@commandlayer.org" }]
-keywords = ["commandlayer", "agents", "receipts", "x402", "ens", "sdk"]
+keywords = ["commandlayer", "agents", "receipts", "protocol-commons", "ens", "sdk"]
 classifiers = [
   "Development Status :: 4 - Beta",
   "Intended Audience :: Developers",
@@ -41,9 +41,9 @@ dev = [
 
 [project.urls]
 Homepage = "https://commandlayer.org"
-Documentation = "https://commandlayer.org/docs.html"
-Repository = "https://github.com/commandlayer"
-Issues = "https://github.com/commandlayer/issues"
+Documentation = "https://github.com/commandlayer/sdk/tree/main/python-sdk"
+Repository = "https://github.com/commandlayer/sdk"
+Issues = "https://github.com/commandlayer/sdk/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]

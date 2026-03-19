@@ -1,392 +1,115 @@
-# CommandLayer SDK — Deployment Guide
+# Deployment and Release Guide
 
-This repo ships **client SDKs + a CLI**. “Deploy” here means: build artifacts, run smoke tests, and (optionally) publish packages.
+This repo publishes two SDK packages from one protocol-aligned codebase:
+- npm: `@commandlayer/sdk`
+- PyPI: `commandlayer`
 
-Repo layout (current intent):
-- `typescript-sdk/` → npm package + CLI (`commandlayer`)
-- `python-sdk/` → PyPI package + CLI (optional)
-- `GsCommand/` → optional wrapper / legacy tooling (only if you’re using it)
+Current release line:
+- SDK package version: `1.1.0`
+- Supported protocol line: Protocol-Commons v1.1.0
+- ENS / Agent-Card alignment: v1.1.0 signer-discovery flow
 
----
+## 1. Preconditions
 
-## 0) Prereqs (do this first)
+Before cutting a release:
+- confirm both SDK packages are on the same version,
+- confirm docs reference the same protocol version and receipt model,
+- confirm shared test vectors still represent the current signed receipt truth,
+- decide whether the release is docs-only or publishable.
 
-### Node / npm (TypeScript SDK)
-- Node: **LTS recommended** (Node 20.x is the safe default).
-  - Your logs show Node **22.20.0**. It can work, but if Windows native deps act up (esbuild), use Node 20 LTS.
-- npm: comes with Node.
-- Git: installed.
+## 2. Local quality gates
 
-### Python (Python SDK)
-- Python 3.10+ recommended.
-- `pip`, `venv`.
+### TypeScript SDK
 
-### Windows-specific notes (your exact errors)
-You hit:
-- `EBUSY` on `esbuild.exe` during install
-- `'tsup' is not recognized`
-
-That combination usually means:
-1) `npm install` didn’t complete, so dev deps (tsup) never installed.
-2) Windows locked a file in `node_modules` (Defender, indexing, or a stale node process).
-
-**Fix path (Windows):**
-- Close any running node processes using the repo (VSCode terminals too).
-- Add your repo folder to Windows Defender exclusions (at least `typescript-sdk/node_modules`).
-- Then clean and reinstall (see section 2).
-
----
-
-## 1) Environment variables (only if needed)
-
-Most SDK work doesn’t require env vars. You only need them if you’re calling a live runtime or verifying receipts.
-
-Common:
-- `COMMANDLAYER_RUNTIME_BASE_URL=https://runtime.commandlayer.org`
-- `COMMANDLAYER_VERIFY_URL=https://runtime.commandlayer.org/verify` (or your Vercel proxy `/api/verify-receipt`)
-
-If you’re doing ENS-based pubkey verification server-side:
-- `ETH_RPC_URL=...`
-- `VERIFIER_ENS_NAME=runtime.commandlayer.eth`
-- `ENS_PUBKEY_TEXT_KEY=cl.receipt.pubkey_pem` *(match your ENS TXT key exactly)*
-
-> SDK build itself does **not** depend on ENS TXT records. ENS only matters for runtime receipt verification logic.
-
----
-
-## 2) TypeScript SDK — Build + smoke test
-
-### A) Clean install (recommended when Windows breaks)
-From repo root:
 ```bash
 cd typescript-sdk
-
-# hard clean
-rmdir /s /q node_modules 2>nul || true
-del package-lock.json 2>nul || true
-
-# clear npm cache (optional but helps)
-npm cache verify
-
-# install
-npm install
-
-## If esbuild still throws EBUSY
-
-- Run the terminal as **Administrator**
-- Temporarily disable real-time protection or add Windows Defender exclusions
-- Retry:
-
-```bash
-npm install
+npm ci
+npm run typecheck
+npm test
 ```
 
----
-
-## B) Build
-
-```bash
-npm run build
-```
-
-### Expected output
-
-- `dist/index.js` (CJS + ESM depending on config)
-- `dist/index.d.ts` (types)
-
-If you see:
-
-```
-'tsup' is not recognized
-```
-
-That means `npm install` did not finish.  
-Re-run the clean install process until dependencies install successfully.
-
----
-
-## C) CLI smoke test (local)
-
-Your CLI is intended to import from `dist/`.
-
-```bash
-node bin/cli.js summarize --content "test" --style bullet_points --json
-```
-
-### If CLI fails with syntax errors
-
-- Ensure `bin/cli.js` is valid JS (no stray template string quoting bugs)
-- Ensure it requires:
-
-```js
-require("../dist/index.js")
-```
-
-And that `dist/` exists after build.
-
----
-
-## D) Optional: link CLI globally for local testing
-
-Inside `typescript-sdk/`:
-
-```bash
-npm link
-commandlayer --help
-commandlayer summarize --content "test" --style bullet_points
-```
-
-### To unlink
-
-```bash
-npm unlink -g @commandlayer/sdk || true
-```
-
----
-
-# 3) TypeScript SDK — Publish to npm (optional)
-
-You have two sane approaches.
-
----
-
-## Option 1: Publish from `typescript-sdk/` as its own package
-
-Best if `typescript-sdk` is a standalone npm package directory.
-
-### Checklist
-
-`typescript-sdk/package.json` must include:
-
-- `"name": "@commandlayer/sdk"` (or your chosen scope)
-- `"version": "x.y.z"`
-- `"main"` and/or `"exports"` pointing at `dist/*`
-- `"types"` pointing at `dist/index.d.ts`
-- `"bin"` pointing at `bin/cli.js` (if publishing CLI)
-- `"files"` field including:
-  - `dist/`
-  - `bin/`
-
-### Publish
-
-```bash
-npm login
-npm publish --access public
-```
-
----
-
-## Option 2: Root publishes multiple packages (monorepo)
-
-Only do this if you’ve set up workspaces + a release tool.
-
-Common tools:
-
-- npm workspaces + changesets
-- pnpm + changesets
-- lerna (less preferred)
-
-If you’re not already using these, don’t introduce them yet.
-
----
-
-# 4) Python SDK — Build + publish (optional)
-
-## A) Setup venv and install
+### Python SDK
 
 ```bash
 cd python-sdk
 python -m venv .venv
-```
-
-Windows:
-
-```bash
-.venv\Scripts\activate
-```
-
-macOS / Linux:
-
-```bash
 source .venv/bin/activate
+pip install -e '.[dev]'
+ruff check .
+mypy commandlayer
+pytest
 ```
 
-Then:
+## 3. Packaging checks
+
+### npm package
 
 ```bash
-pip install -U pip build twine
-pip install -e .
+cd typescript-sdk
+npm pack --dry-run
 ```
 
----
+Verify that the tarball includes:
+- `dist/index.cjs`
+- `dist/index.mjs`
+- `dist/index.d.ts`
+- `dist/cli.cjs`
+- `README.md`
 
-## B) Build
+### PyPI package
 
 ```bash
+cd python-sdk
 python -m build
+python -m twine check dist/*
 ```
 
----
+## 4. Publish flow
 
-## C) Publish
+### npm
 
 ```bash
-twine upload dist/*
+cd typescript-sdk
+npm publish --access public
 ```
 
----
-
-# 5) GitHub Actions (recommended)
-
-Minimal CI for `typescript-sdk/` should:
-
-- install
-- build
-- run CLI smoke test
-
-### Example workflow  
-`.github/workflows/typescript-sdk.yml`
-
-```yaml
-name: typescript-sdk
-
-on:
-  push:
-    branches: [ main ]
-  pull_request:
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: typescript-sdk
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: "npm"
-          cache-dependency-path: typescript-sdk/package-lock.json
-      - run: npm ci
-      - run: npm run build
-      - run: node bin/cli.js summarize --content "test" --style bullet_points --json
-```
-
-If you want publish-on-tag later, add a separate job gated on Git tags.
-
----
-
-# 6) Versioning + release discipline
-
-Use **SemVer**:
-
-- Patch → bug fixes (no API break)
-- Minor → new verbs / options (backward compatible)
-- Major → breaking API changes
-
-### Recommended release steps
-
-1. Update `CHANGELOG.md`
-2. Bump version:
+### PyPI
 
 ```bash
-npm version patch
-# or
-npm version minor
-# or
-npm version major
+cd python-sdk
+python -m build
+python -m twine upload dist/*
 ```
 
-3. Build
-4. Smoke test CLI
-5. Tag + push
-6. Publish
+## 5. Git and release metadata
 
----
+Release steps:
+1. merge the release branch,
+2. create a git tag matching the SDK version, for example `sdk-v1.1.0`,
+3. publish npm,
+4. publish PyPI,
+5. create GitHub release notes summarizing protocol line, SDK changes, and any migration notes.
 
-# 7) ENS TXT records — do they affect SDK deployment?
+Release notes should call out:
+- supported protocol version,
+- receipt model changes,
+- verification API changes,
+- runtime compatibility notes,
+- any explicit legacy compatibility retained.
 
-No. Not for building or publishing.
+## 6. commandlayer.org coordination
 
-They affect:
+If the public docs site references installation or verification examples, update it in the same release window so that:
+- package versions match,
+- receipt examples match the repo,
+- verification examples use the same API shapes,
+- CLI examples are reproducible.
 
-- Runtime receipt verification (“resolve pubkey from ENS”)
-- Cross-verification tooling
+## 7. CI expectations
 
-If your SDK includes a `verifyReceipt()` helper that can:
+CI should stay green for:
+- TypeScript typecheck/build/tests,
+- Python lint/typecheck/tests,
+- cross-SDK runtime fixture checks.
 
-- Verify with an explicit pubkey (offline)
-- OR resolve pubkey from ENS (requires RPC)
-
-Then ENS records affect verification correctness — not build or release.
-
-### Your current ENS records
-
-```
-cl.receipt.pubkey_pem = PEM (escaped newlines)
-cl.receipt.signer_id = runtime.commandlayer.eth
-cl.receipt.alg = ed25519
-```
-
-That’s the correct structure for “ENS as pubkey directory.”
-
----
-
-# 8) Known pitfalls (save yourself time)
-
-## Windows esbuild EBUSY
-
-Symptoms:
-- Install fails
-
-Fix:
-- Add Defender exclusion
-- Close processes holding `node_modules`
-- Delete `node_modules` and reinstall
-
----
-
-## CLI shebang on Windows
-
-```bash
-#!/usr/bin/env node
-```
-
-This is fine. Windows ignores it; npm shim handles execution.
-
-Ensure `package.json` includes:
-
-```json
-"bin": {
-  "commandlayer": "bin/cli.js"
-}
-```
-
----
-
-## Don’t run CLI before build
-
-CLI requires:
-
-```
-../dist/index.js
-```
-
-Always build first.
-
----
-
-# 9) “Definition of Done” for SDK deployment
-
-You’re deployed when:
-
-- `npm install` succeeds cleanly
-- `npm run build` produces `dist/`
-- `node bin/cli.js summarize ...` returns receipt JSON without crashing
-- CI runs the same steps on push/PR
-
----
-
-If you want, paste your `typescript-sdk/package.json` and I’ll rewrite it so `dist/` and `bin/` publish cleanly and the CLI installs as `commandlayer` without hacks.
-
+Do not publish if any of those lanes are red.

@@ -9,7 +9,7 @@ const { verifyReceipt } = require("../../typescript-sdk/dist/index.cjs");
 const publicKey = `ed25519:${loadTextFixture("public_key_base64.txt")}`;
 
 async function verifyReceiptWithKid(receipt) {
-  if (receipt.kid !== "v1") {
+  if (receipt.kid && receipt.kid !== "v1") {
     return { valid: false, error: "Unknown key id" };
   }
   const result = await verifyReceipt(receipt, { publicKey });

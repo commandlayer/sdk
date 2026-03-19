@@ -1,195 +1,156 @@
 # CommandLayer SDK Quickstart
 
-Install. Call a verb. Get a signed receipt.
+Goal: install the SDK, run one verb, inspect the receipt, verify it, and reproduce the call in under three minutes.
 
-You can integrate CommandLayer in under 2 minutes.
+## 1. Install
 
----
-
-## What is CommandLayer?
-
-CommandLayer is the **semantic verb layer** for autonomous agents.
-
-It provides:
-
-- Standardized verbs (`summarize`, `analyze`, `classify`, etc.)
-- Strict JSON request & receipt schemas
-- Cryptographically signed receipts (Ed25519 + SHA-256)
-- x402-compatible execution envelopes
-- ERC-8004–aligned agent discovery
-
-CommandLayer turns agent actions into **verifiable infrastructure**.
-
----
-
-# 1️⃣ Install
-
-## TypeScript / JavaScript
+### TypeScript / JavaScript
 
 ```bash
 npm install @commandlayer/sdk
 ```
 
-## Python
+### Python
 
 ```bash
 pip install commandlayer
 ```
 
----
+### CLI
 
-# 2️⃣ Make Your First Call
+The CLI ships with the npm package:
 
-## TypeScript
+```bash
+npm install -g @commandlayer/sdk
+```
+
+## 2. Make your first call
+
+### TypeScript
 
 ```ts
 import { createClient } from "@commandlayer/sdk";
 
-const client = createClient({
-  actor: "my-app"
-});
+const client = createClient({ actor: "quickstart-ts" });
 
-const receipt = await client.summarize({
-  content: "CommandLayer makes agent actions structured and verifiable.",
+const response = await client.summarize({
+  content: "CommandLayer makes agent execution verifiable.",
   style: "bullet_points"
 });
 
-console.log(receipt.result.summary);
+console.log(response.receipt.result?.summary);
 ```
 
----
-
-## Python
+### Python
 
 ```python
 from commandlayer import create_client
 
-client = create_client(actor="my-app")
-
-receipt = client.summarize(
-    content="CommandLayer makes agent actions structured and verifiable.",
-    style="bullet_points"
+client = create_client(actor="quickstart-py")
+response = client.summarize(
+    content="CommandLayer makes agent execution verifiable.",
+    style="bullet_points",
 )
 
-print(receipt["result"]["summary"])
+print(response["receipt"]["result"]["summary"])
 ```
 
----
+## 3. Inspect the response
 
-## CLI
+Both SDKs return the same shape:
 
-```bash
-commandlayer summarize \
-  --content "CommandLayer makes agent actions structured and verifiable." \
-  --style bullet_points
+```json
+{
+  "receipt": {
+    "status": "success",
+    "x402": { "verb": "summarize", "version": "1.1.0" },
+    "result": { "summary": "..." },
+    "metadata": {
+      "receipt_id": "...",
+      "proof": {
+        "alg": "ed25519-sha256",
+        "canonical": "cl-stable-json-v1",
+        "signer_id": "runtime.commandlayer.eth",
+        "hash_sha256": "...",
+        "signature_b64": "..."
+      }
+    }
+  },
+  "runtime_metadata": {
+    "trace_id": "trace_123",
+    "duration_ms": 118
+  }
+}
 ```
 
----
+Use `response.receipt` as the durable protocol artifact. `runtime_metadata` is optional execution context.
 
-# 3️⃣ What You Get Back
+## 4. Verify the receipt
 
-Every call returns a **signed receipt**, not just raw output.
-
-```ts
-receipt.status                 // "success"
-receipt.metadata.receipt_id    // Deterministic receipt hash
-receipt.trace.duration_ms      // Execution latency
-
-receipt.result                 // Structured verb output
-
-receipt.metadata.proof.hash_sha256
-receipt.metadata.proof.signature_b64
-receipt.metadata.proof.signer_id
-receipt.metadata.proof.alg     // "ed25519-sha256"
-```
-
-Receipts are:
-
-- Canonicalized
-- Hashed (SHA-256)
-- Signed (Ed25519)
-- Verifiable independently
-
-By default, the SDK verifies receipts automatically.
-
----
-
-# 4️⃣ Available Verbs
-
-The Commons SDK includes 10 verbs:
-
-- `summarize`
-- `analyze`
-- `classify`
-- `clean`
-- `convert`
-- `describe`
-- `explain`
-- `format`
-- `parse`
-- `fetch`
-
-All verbs return structured, signed receipts.
-
----
-
-# 5️⃣ Configuration
-
-```ts
-const client = createClient({
-  actor: "my-production-app",
-  runtime: "https://runtime.commandlayer.org", // default
-  verifyReceipts: true                          // default
-});
-```
-
-### Options
-
-- `actor` — Identifier for your application or tenant
-- `runtime` — Custom runtime base URL
-- `verifyReceipts` — Enable/disable signature verification
-
----
-
-# 6️⃣ Production Notes
-
-- Always set a meaningful `actor`
-- Keep `verifyReceipts` enabled in production
-- Store `receipt_id` for audit trails
-- Treat receipts as durable evidence, not logs
-
----
-
-# 7️⃣ Verify a Receipt (Optional)
+### TypeScript
 
 ```ts
 import { verifyReceipt } from "@commandlayer/sdk";
 
-const ok = await verifyReceipt(receipt, {
-  ens: true,
-  rpcUrl: "https://mainnet.infura.io/v3/..."
+const result = await verifyReceipt(response.receipt, {
+  publicKey: "ed25519:BASE64_PUBLIC_KEY"
 });
 
-console.log("Verified:", ok);
+console.log(result.ok);
 ```
 
-You can verify:
+### Python
 
-- With a provided public key (offline)
-- By resolving signer pubkey from ENS
-- Or disable verification entirely
+```python
+from commandlayer import verify_receipt
 
----
+result = verify_receipt(
+    response["receipt"],
+    public_key="ed25519:BASE64_PUBLIC_KEY",
+)
+print(result["ok"])
+```
 
-# Next Steps
+### ENS-backed verification
 
-📖 Real-world usage → `EXAMPLES.md`  
-🚀 Deployment & publishing → `DEPLOYMENT_GUIDE.md`  
-🔍 SDK architecture → `DEVELOPER_EXPERIENCE.md`  
-🌐 Full docs → https://commandlayer.org/docs.html  
+Use the same signer-discovery model in both SDKs:
+- agent ENS TXT: `cl.receipt.signer`
+- signer ENS TXT: `cl.sig.pub`
+- signer ENS TXT: `cl.sig.kid`
 
----
+## 5. Try the CLI
 
-CommandLayer turns agent execution into verifiable infrastructure.
+```bash
+commandlayer summarize \
+  --content "CommandLayer makes agent execution verifiable." \
+  --style bullet_points \
+  --json
+```
 
-You're ready to build.
+Save the returned JSON and verify it:
+
+```bash
+commandlayer verify \
+  --file receipt.json \
+  --public-key "ed25519:BASE64_PUBLIC_KEY"
+```
+
+## 6. What is stable today?
+
+Stable in this repo:
+- Protocol-Commons v1.1.0 verb surface,
+- canonical signed receipt verification,
+- ENS signer discovery helpers,
+- TypeScript SDK `@commandlayer/sdk` v1.1.0,
+- Python SDK `commandlayer` v1.1.0.
+
+Not claimed as first-class SDK support here:
+- Protocol-Commercial payment flows,
+- runtime-specific orchestration metadata beyond the generic `runtime_metadata` envelope.
+
+## Next steps
+
+- More recipes: `EXAMPLES.md`
+- Package docs: `typescript-sdk/README.md`, `python-sdk/README.md`
+- Maintainer notes: `DEVELOPER_EXPERIENCE.md`
+- Release flow: `DEPLOYMENT_GUIDE.md`

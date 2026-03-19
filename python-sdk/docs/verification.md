@@ -1,10 +1,12 @@
 # Verification
 
-The SDK verifies signed receipts using:
+The SDK verifies canonical signed receipts using:
 
 - canonical JSON: `cl-stable-json-v1`
-- hash: `sha256` over unsigned receipt
-- signature: `ed25519` over the hash string
+- hash: `sha256` over the unsigned receipt
+- signature: `ed25519` over the resulting hash string
+
+`runtime_metadata` is not part of the signed payload.
 
 ## ENS key resolution flow
 
@@ -19,6 +21,9 @@ Use `resolve_signer_key(name, rpc_url)` for direct key resolution.
 ```python
 from commandlayer import verify_receipt
 
-result = verify_receipt(receipt, ens={"name": "summarizeagent.eth", "rpcUrl": "https://..."})
+result = verify_receipt(
+    response["receipt"],
+    ens={"name": "summarizeagent.eth", "rpcUrl": "https://..."},
+)
 print(result["ok"])
 ```

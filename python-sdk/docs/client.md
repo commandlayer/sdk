@@ -4,13 +4,26 @@
 
 `CommandLayerClient(runtime, actor, timeout_ms, headers, retries, verify_receipts, verify)`
 
-- `runtime`: Base runtime URL.
-- `actor`: Default actor ID used in requests.
-- `timeout_ms`: Request timeout.
-- `headers`: Additional request headers.
-- `retries`: Retry count for transport/timeout errors.
-- `verify_receipts`: If true, verify every returned receipt.
-- `verify`: Verification options (`public_key` / `ens`).
+- `runtime`: Runtime base URL. Defaults to `https://runtime.commandlayer.org`.
+- `actor`: Actor ID attached to requests.
+- `timeout_ms`: Request timeout in milliseconds.
+- `headers`: Additional headers.
+- `retries`: Retry count for transport and timeout failures.
+- `verify_receipts`: Verify every returned canonical receipt before returning.
+- `verify`: Verification options (`public_key`/`publicKey` or `ens`).
+
+## Return shape
+
+Every verb method returns:
+
+```python
+{
+  "receipt": {...},
+  "runtime_metadata": {...},  # optional
+}
+```
+
+`receipt` is the canonical signed payload. `runtime_metadata` is execution context and is not part of the signed receipt hash.
 
 ## Verbs
 

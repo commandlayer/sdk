@@ -3,20 +3,32 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Literal, TypedDict
 
-Receipt = dict[str, Any]
+CanonicalReceipt = dict[str, Any]
+
+
+class RuntimeMetadata(TypedDict, total=False):
+    trace_id: str
+    parent_trace_id: str | None
+    started_at: str
+    completed_at: str
+    duration_ms: int
+    provider: str
+    runtime: str
+    request_id: str
+
+
+class CommandResponse(TypedDict, total=False):
+    receipt: CanonicalReceipt
+    runtime_metadata: RuntimeMetadata
 
 
 class EnsVerifyOptions(TypedDict, total=False):
-    """ENS options for receipt verification."""
-
     name: str
     rpc_url: str
     rpcUrl: str
 
 
 class VerifyOptions(TypedDict, total=False):
-    """Verification options for client-side receipt checks."""
-
     public_key: str
     publicKey: str
     ens: EnsVerifyOptions

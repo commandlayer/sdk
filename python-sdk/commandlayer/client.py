@@ -3,16 +3,17 @@ from __future__ import annotations
 import json
 import time
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, cast
 
 import httpx
 
 from .errors import CommandLayerError
-from .types import Receipt, VerifyOptions
+from .types import CommandResponse, RuntimeMetadata, VerifyOptions
 from .verify import verify_receipt
 
-VERSION = "1.0.0"
-
+COMMONS_VERSION = "1.1.0"
+PACKAGE_VERSION = "1.1.0"
+DEFAULT_RUNTIME = "https://runtime.commandlayer.org"
 VERBS = {
     "summarize",
     "analyze",
@@ -31,12 +32,30 @@ def _normalize_base(url: str) -> str:
     return str(url or "").rstrip("/")
 
 
+def normalize_command_response(payload: Any) -> CommandResponse:
+    if not isinstance(payload, dict):
+        raise CommandLayerError("Runtime response must be a JSON object", 502, payload)
+
+    if isinstance(payload.get("receipt"), dict):
+        response: CommandResponse = {"receipt": payload["receipt"]}
+        if isinstance(payload.get("runtime_metadata"), dict):
+            response["runtime_metadata"] = cast(RuntimeMetadata, dict(payload["runtime_metadata"]))
+        return response
+
+    receipt = dict(payload)
+    runtime_metadata = receipt.pop("trace", None)
+    response = {"receipt": receipt}
+    if isinstance(runtime_metadata, dict):
+        response["runtime_metadata"] = cast(RuntimeMetadata, runtime_metadata)
+    return response
+
+
 class CommandLayerClient:
-    """Synchronous CommandLayer client for Commons verbs."""
+    """Synchronous CommandLayer client for Protocol-Commons v1.1.0 verbs."""
 
     def __init__(
         self,
-        runtime: str = "https://runtime.commandlayer.org",
+        runtime: str = DEFAULT_RUNTIME,
         actor: str = "sdk-user",
         timeout_ms: int = 30_000,
         headers: Mapping[str, str] | None = None,
@@ -51,28 +70,23 @@ class CommandLayerClient:
         self.retries = max(0, retries)
         self.verify_receipts = verify_receipts is True
         self.verify_defaults: VerifyOptions = verify or {}
-
         self.default_headers = {
             "Content-Type": "application/json",
-            "User-Agent": f"commandlayer-py/{VERSION}",
+            "User-Agent": f"commandlayer-py/{PACKAGE_VERSION}",
         }
         if headers:
             self.default_headers.update(dict(headers))
-
         self._http = http_client or httpx.Client(timeout=self.timeout_ms / 1000)
 
     def _ensure_verify_config_if_enabled(self) -> None:
         if not self.verify_receipts:
             return
-
         explicit_public_key = self.verify_defaults.get("public_key") or self.verify_defaults.get(
             "publicKey"
         )
         has_explicit = bool(str(explicit_public_key or "").strip())
-
         ens = self.verify_defaults.get("ens") or {}
         has_ens = bool(ens.get("name") and (ens.get("rpcUrl") or ens.get("rpc_url")))
-
         if not has_explicit and not has_ens:
             raise CommandLayerError(
                 "verify_receipts is enabled but no verification key config provided. "
@@ -87,7 +101,7 @@ class CommandLayerClient:
         style: str | None = None,
         format: str | None = None,
         max_tokens: int = 1000,
-    ) -> Receipt:
+    ) -> CommandResponse:
         return self.call(
             "summarize",
             {
@@ -107,7 +121,7 @@ class CommandLayerClient:
         goal: str | None = None,
         hints: list[str] | None = None,
         max_tokens: int = 1000,
-    ) -> Receipt:
+    ) -> CommandResponse:
         payload: dict[str, Any] = {
             "input": content,
             "limits": {"max_output_tokens": max_tokens},
@@ -118,7 +132,9 @@ class CommandLayerClient:
             payload["hints"] = hints
         return self.call("analyze", payload)
 
-    def classify(self, *, content: str, max_labels: int = 5, max_tokens: int = 1000) -> Receipt:
+    def classify(
+        self, *, content: str, max_labels: int = 5, max_tokens: int = 1000
+    ) -> CommandResponse:
         return self.call(
             "classify",
             {
@@ -134,7 +150,7 @@ class CommandLayerClient:
         content: str,
         operations: list[str] | None = None,
         max_tokens: int = 1000,
-    ) -> Receipt:
+    ) -> CommandResponse:
         return self.call(
             "clean",
             {
@@ -154,7 +170,7 @@ class CommandLayerClient:
         from_format: str,
         to_format: str,
         max_tokens: int = 1000,
-    ) -> Receipt:
+    ) -> CommandResponse:
         return self.call(
             "convert",
             {
@@ -174,7 +190,7 @@ class CommandLayerClient:
         audience: str = "general",
         detail: str = "medium",
         max_tokens: int = 1000,
-    ) -> Receipt:
+    ) -> CommandResponse:
         return self.call(
             "describe",
             {
@@ -195,7 +211,7 @@ class CommandLayerClient:
         style: str = "step-by-step",
         detail: str = "medium",
         max_tokens: int = 1000,
-    ) -> Receipt:
+    ) -> CommandResponse:
         return self.call(
             "explain",
             {
@@ -209,7 +225,7 @@ class CommandLayerClient:
             },
         )
 
-    def format(self, *, content: str, to: str, max_tokens: int = 1000) -> Receipt:
+    def format(self, *, content: str, to: str, max_tokens: int = 1000) -> CommandResponse:
         return self.call(
             "format",
             {
@@ -226,7 +242,7 @@ class CommandLayerClient:
         mode: str = "best_effort",
         target_schema: str | None = None,
         max_tokens: int = 1000,
-    ) -> Receipt:
+    ) -> CommandResponse:
         payload: dict[str, Any] = {
             "input": {
                 "content": content,
@@ -246,13 +262,12 @@ class CommandLayerClient:
         query: str | None = None,
         include_metadata: bool | None = None,
         max_tokens: int = 1000,
-    ) -> Receipt:
+    ) -> CommandResponse:
         input_obj: dict[str, Any] = {"source": source}
         if query is not None:
             input_obj["query"] = query
         if include_metadata is not None:
             input_obj["include_metadata"] = include_metadata
-
         return self.call(
             "fetch",
             {"input": input_obj, "limits": {"max_output_tokens": max_tokens}},
@@ -262,16 +277,15 @@ class CommandLayerClient:
         return {
             "x402": {
                 "verb": verb,
-                "version": VERSION,
-                "entry": f"x402://{verb}agent.eth/{verb}/v{VERSION}",
+                "version": COMMONS_VERSION,
+                "entry": f"x402://{verb}agent.eth/{verb}/v{COMMONS_VERSION}",
             },
             "actor": body.get("actor", self.actor),
             **body,
         }
 
     def _request(self, verb: str, payload: dict[str, Any]) -> httpx.Response:
-        url = f"{self.runtime}/{verb}/v{VERSION}"
-
+        url = f"{self.runtime}/{verb}/v{COMMONS_VERSION}"
         attempt = 0
         while True:
             try:
@@ -282,14 +296,12 @@ class CommandLayerClient:
             except httpx.HTTPError as err:
                 if attempt >= self.retries:
                     raise CommandLayerError(f"HTTP transport error: {err}") from err
-
             attempt += 1
             time.sleep(min(0.2 * attempt, 1.0))
 
-    def call(self, verb: str, body: dict[str, Any]) -> Receipt:
+    def call(self, verb: str, body: dict[str, Any]) -> CommandResponse:
         if verb not in VERBS:
             raise CommandLayerError(f"Unsupported verb: {verb}", 400)
-
         self._ensure_verify_config_if_enabled()
         payload = self._build_payload(verb, body)
         response = self._request(verb, payload)
@@ -311,22 +323,17 @@ class CommandLayerClient:
             )
             raise CommandLayerError(str(message), response.status_code, data)
 
-        if not isinstance(data, dict):
-            raise CommandLayerError(
-                "Runtime response must be a JSON object", response.status_code, data
-            )
-
+        normalized = normalize_command_response(data)
         if self.verify_receipts:
             verify_result = verify_receipt(
-                data,
+                normalized["receipt"],
                 public_key=self.verify_defaults.get("public_key")
                 or self.verify_defaults.get("publicKey"),
                 ens=self.verify_defaults.get("ens"),
             )
             if not verify_result["ok"]:
                 raise CommandLayerError("Receipt verification failed", 422, verify_result)
-
-        return data
+        return normalized
 
     def close(self) -> None:
         self._http.close()

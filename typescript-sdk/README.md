@@ -1,331 +1,119 @@
 # CommandLayer TypeScript SDK
 
-Semantic verbs. Typed schemas. Signed receipts.
+Official TypeScript/JavaScript SDK for CommandLayer Commons v1.1.0.
 
-This package provides the official TypeScript/JavaScript SDK for **CommandLayer Commons v1.0.0**.
+Use this package to:
+- call CommandLayer Commons verbs,
+- receive a canonical signed receipt,
+- capture optional runtime metadata separately,
+- verify receipts offline or through ENS, and
+- reproduce calls from the CLI.
 
-Install → call a verb → receive a signed receipt → verify it.
-
----
-
-## Overview
-
-CommandLayer is the semantic verb layer for autonomous agents.
-
-The SDK provides:
-
-- Standardized Commons verbs (`summarize`, `analyze`, `fetch`, etc.)
-- Strict JSON Schemas (requests + receipts)
-- Cryptographically signed receipts (Ed25519 + SHA-256)
-- Deterministic canonicalization (`cl-stable-json-v1`)
-- Verification helpers (offline or ENS-based)
-- CLI for reproducible local testing
-
----
-
-## Installation
+## Install
 
 ```bash
 npm install @commandlayer/sdk
 ```
 
-### Quickstart (TypeScript)
-```
-import { createClient } from "@commandlayer/sdk";
+Supported runtime: Node.js 20+.
 
-const client = createClient({
-  actor: "my-app"
-});
+## Quick start
 
-const receipt = await client.summarize({
-  content: "CommandLayer turns agent actions into verifiable receipts.",
+```ts
+import { createClient, verifyReceipt } from "@commandlayer/sdk";
+
+const client = createClient({ actor: "docs-example" });
+
+const response = await client.summarize({
+  content: "CommandLayer makes agent execution verifiable.",
   style: "bullet_points"
 });
 
-console.log(receipt.result.summary);
-console.log(receipt.metadata.receipt_id);
-```
----
+console.log(response.receipt.result?.summary);
+console.log(response.receipt.metadata?.receipt_id);
+console.log(response.runtime_metadata?.duration_ms);
 
-### Runtime Configuration
-
-Default runtime:
-```
-https://runtime.commandlayer.org
-```
-
-Override if needed:
-```
-const client = createClient({
-  actor: "my-app",
-  runtime: "https://your-runtime.example",
-  verifyReceipts: true
+const verification = await verifyReceipt(response.receipt, {
+  publicKey: process.env.COMMANDLAYER_PUBLIC_KEY!
 });
+
+console.log(verification.ok);
 ```
 
-verifyReceipts should remain enabled in production.
+## Return shape
 
----
+Client methods return:
 
-### Receipt Structure
-
-Every call returns a signed receipt:
-
-```
+```json
 {
-  "status": "success",
-  "x402": {
-    "verb": "summarize",
-    "version": "1.0.0",
-    "entry": "x402://summarizeagent.eth/summarize/v1.0.0"
-  },
-  "trace": {
-    "trace_id": "trace_ab12cd34",
-    "duration_ms": 118
-  },
-  "result": {
-    "summary": "..."
-  },
-  "metadata": {
-    "receipt_id": "8f0a...",
-    "proof": {
-      "alg": "ed25519-sha256",
-      "canonical": "cl-stable-json-v1",
-      "signer_id": "runtime.commandlayer.eth",
-      "hash_sha256": "...",
-      "signature_b64": "..."
+  "receipt": {
+    "status": "success",
+    "x402": {
+      "verb": "summarize",
+      "version": "1.1.0"
+    },
+    "result": {},
+    "metadata": {
+      "receipt_id": "...",
+      "proof": {
+        "alg": "ed25519-sha256",
+        "canonical": "cl-stable-json-v1",
+        "signer_id": "runtime.commandlayer.eth",
+        "hash_sha256": "...",
+        "signature_b64": "..."
+      }
     }
+  },
+  "runtime_metadata": {
+    "trace_id": "trace_123",
+    "duration_ms": 118,
+    "provider": "runtime.commandlayer.org"
   }
 }
 ```
 
-Receipt guarantees:
+`verifyReceipt()` accepts the canonical `receipt` object. The SDK also accepts a whole response envelope for legacy compatibility, but new integrations should pass `response.receipt` explicitly.
 
-- Stable canonical hashing
-- SHA-256 digest over unsigned receipt
-- Ed25519 signature over the hash
-- Deterministic validation across runtimes
+## Verification modes
 
----
+### Offline
 
-### Verifying Receipts
- 
-
-**Option A — Offline (explicit public key)**
-
-Fastest method. No RPC required.
-```
-import { verifyReceipt } from "@commandlayer/sdk";
-
-const result = await verifyReceipt(receipt, {
-  publicKey: "ed25519:7Vkkmt6R02Iltp/+i3D5mraZyvLjfuTSVB33KwfzQC8="
+```ts
+const result = await verifyReceipt(response.receipt, {
+  publicKey: "ed25519:BASE64_PUBLIC_KEY"
 });
-
-console.log(result.ok);
 ```
----
 
-**Option B — ENS-based Verification**
+### ENS-backed
 
-Resolves signer metadata from ENS TXT records.
-
-Required ENS records:
-
-- Agent ENS TXT: `cl.receipt.signer`
-- Signer ENS TXT: `cl.sig.pub`
-- Signer ENS TXT: `cl.sig.kid`
-
-Example:
-```
-import { verifyReceipt } from "@commandlayer/sdk";
-
-const out = await verifyReceipt(receipt, {
+```ts
+const result = await verifyReceipt(response.receipt, {
   ens: {
     name: "summarizeagent.eth",
-    rpcUrl: process.env.ETH_RPC_URL!
+    rpcUrl: process.env.MAINNET_RPC_URL!
   }
 });
-
-console.log(out.ok, out.values.pubkey_source);
 ```
 
-ENS affects verification correctness — not build or publishing.
+The ENS flow resolves:
+1. `cl.receipt.signer` on the agent ENS name,
+2. `cl.sig.pub` on the signer ENS name,
+3. `cl.sig.kid` on the signer ENS name.
 
----
+## CLI
 
-**Commons Verbs**
+The package ships the `commandlayer` CLI.
 
-All verbs return signed receipts.
-```
-await client.summarize({ content, style: "bullet_points" });
-
-await client.analyze({
-  content,
-  dimensions: ["sentiment", "tone"]
-});
-
-await client.classify({
-  content,
-  categories: ["support", "billing"]
-});
-
-await client.clean({
-  content,
-  operations: ["trim", "normalize_newlines"]
-});
-
-await client.convert({
-  content,
-  from: "json",
-  to: "csv"
-});
-
-await client.describe({
-  subject,
-  detail_level: "medium"
-});
-
-await client.explain({
-  subject,
-  style: "step-by-step"
-});
-
-await client.format({
-  content,
-  to: "table"
-});
-
-await client.parse({
-  content,
-  content_type: "json"
-});
-
-await client.fetch({
-  source: "https://example.com"
-});
+```bash
+commandlayer summarize --content "hello" --style bullet_points --json
+commandlayer verify --file receipt.json --public-key "ed25519:BASE64_PUBLIC_KEY"
 ```
 
-See `EXAMPLES.md` for full technical payloads.
+## Development
 
-### CLI
-
-The SDK includes a CLI for local testing.
-
-**Build First**
-```
-npm run build
-```
-
-Expected output:
-
-- `dist/index.cjs`
-- `dist/index.mjs`
-- `dist/cli.cjs`
-- `dist/index.d.ts`
-
-**Run**
-```
-node dist/cli.cjs summarize --content "test" --style bullet_points --json
-```
-
-***Global Link (Optional)**
-```
-npm link
-commandlayer --help
-commandlayer summarize --content "test" --style bullet_points
-```
-
-To unlink:
-```
-npm unlink -g @commandlayer/sdk || true
-```
-### Windows esbuild EBUSY Fix
-
-- If install fails with EBUSY:
-- Run terminal as Administrator
-- Temporarily disable Defender real-time protection
-- Close processes locking `node_modules`
-- Delete `node_modules`
-- Retry `npm install`
-
-If you see:
-```
-'tsup' is not recognized
-```
-
-`npm install` did not complete successfully.
-
----
-
-### Local Development Workflow
-```
-sdk/
-  typescript-sdk/
-    src/
-    dist/
-    bin/
-```
-
-Typical flow:
-```
+```bash
 cd typescript-sdk
-npm install
-npm run build
-npm run test:cli-smoke
-node dist/cli.cjs summarize --content "test" --style bullet_points --json
+npm ci
+npm run typecheck
+npm test
 ```
----
-
-### Publishing to npm (Optional)
-
-Ensure `typescript-sdk/package.json` includes:
-
-- name
-- version
-- main / module / exports → dist/*
-- types → dist/index.d.ts
-- bin → bin/cli.js
-- files → dist/ and bin/
-
-Then:
-```
-npm login
-npm publish --access public
-```
----
-
-### Versioning
-
-Use Semantic Versioning:
-
-- Patch → bug fixes
-- Minor → backward-compatible additions
-- Major → breaking changes
-
-Release flow:
-
-Update `CHANGELOG.md`
-`npm version patch|minor|major`
-`npm run build`
-CLI smoke test
-Tag + push
-
-Publish
-
-### Definition of Done
-
-You are deployed when:
-
-- `npm install` succeeds cleanly
-- `npm run build` produces `dist/`
-- CLI returns valid receipt JSON
-- CI reproduces the same steps on push
-
----
-License
-
-MIT
-
-CommandLayer turns agent actions into verifiable infrastructure.
-
-Ship APIs that can prove what they did.

@@ -1,17 +1,21 @@
-name: TypeScript SDK CLI Smoke
+name: TypeScript SDK
 
 on:
   push:
     paths:
       - "typescript-sdk/**"
+      - "runtime/tests/**"
+      - "test_vectors/**"
       - ".github/workflows/typescript-sdk-cli-smoke.yml"
   pull_request:
     paths:
       - "typescript-sdk/**"
+      - "runtime/tests/**"
+      - "test_vectors/**"
       - ".github/workflows/typescript-sdk-cli-smoke.yml"
 
 jobs:
-  cli-smoke:
+  test:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -23,7 +27,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 20
           cache: npm
           cache-dependency-path: typescript-sdk/package-lock.json
 
@@ -39,5 +43,11 @@ jobs:
       - name: Unit tests
         run: npm run test:unit
 
+      - name: Runtime protocol tests
+        run: node --test ../runtime/tests/*.mjs
+
       - name: CLI smoke tests
         run: npm run test:cli-smoke
+
+      - name: Package dry run
+        run: npm pack --dry-run

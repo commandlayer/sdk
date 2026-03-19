@@ -12,11 +12,11 @@ pip install commandlayer
 from commandlayer import create_client
 
 client = create_client(actor="my-app")
-receipt = client.summarize(content="Hello world", style="bullet_points")
-print(receipt["status"])
+response = client.summarize(content="Hello world", style="bullet_points")
+print(response["receipt"]["status"])
 ```
 
-## Verify receipts (recommended in production)
+## Verify receipts in production
 
 ```python
 from commandlayer import CommandLayerClient
