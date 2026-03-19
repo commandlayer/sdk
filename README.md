@@ -176,5 +176,6 @@ The CLI is intended for demos, CI smoke tests, debugging, and reproducing SDK fl
 - Cookbook examples: `EXAMPLES.md`
 - Maintainer / architecture notes: `DEVELOPER_EXPERIENCE.md`
 - Build, release, and publish flow: `DEPLOYMENT_GUIDE.md`
+- Changelog: `CHANGELOG.md`
 - TypeScript package docs: `typescript-sdk/README.md`
 - Python package docs: `python-sdk/README.md`
