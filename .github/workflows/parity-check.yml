@@ -1,0 +1,51 @@
+name: parity-check
+
+on:
+  push:
+    paths:
+      - "typescript-sdk/**"
+      - "python-sdk/**"
+      - "test_vectors/**"
+      - "scripts/**"
+      - ".github/workflows/parity-check.yml"
+  pull_request:
+    paths:
+      - "typescript-sdk/**"
+      - "python-sdk/**"
+      - "test_vectors/**"
+      - "scripts/**"
+      - ".github/workflows/parity-check.yml"
+
+jobs:
+  parity:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: typescript-sdk/package-lock.json
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install TypeScript dependencies
+        working-directory: typescript-sdk
+        run: npm ci
+
+      - name: Build TypeScript SDK
+        working-directory: typescript-sdk
+        run: npm run build
+
+      - name: Install Python dependencies
+        working-directory: python-sdk
+        run: pip install -e '.[dev]'
+
+      - name: Run cross-SDK parity validation
+        run: node scripts/parity-check.mjs

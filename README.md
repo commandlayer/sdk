@@ -2,6 +2,16 @@
 
 Official SDK repo for CommandLayer Protocol-Commons v1.1.0.
 
+## Start Here
+
+- Quickstart → `QUICKSTART.md`
+- Full usage → `EXAMPLES.md`
+- Contributing → `CONTRIBUTING.md`
+- Maintainers → `MAINTAINER_GUIDE.md`
+- Releases → `RELEASE_GUIDE.md`
+- Test vectors → `test_vectors/README.md`
+- Changelog → `CHANGELOG.md`
+
 This repository ships the public developer surfaces for CommandLayer:
 - the TypeScript SDK: `@commandlayer/sdk`,
 - the Python SDK: `commandlayer`,

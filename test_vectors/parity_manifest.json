@@ -1,0 +1,47 @@
+{
+  "verification_vectors": [
+    {
+      "name": "receipt_valid.json",
+      "expected_ok": true,
+      "description": "Canonical v1.1.0 receipt verifies with explicit public key"
+    },
+    {
+      "name": "receipt_valid_v1.json",
+      "expected_ok": true,
+      "description": "Versioned valid receipt preserves hash and signature semantics"
+    },
+    {
+      "name": "receipt_invalid_sig.json",
+      "expected_ok": false,
+      "description": "Tampered signature fails verification"
+    },
+    {
+      "name": "receipt_wrong_kid.json",
+      "expected_ok": false,
+      "description": "Hash drift caused by kid mutation fails verification even with an explicit key"
+    },
+    {
+      "name": "receipt_malformed_pubkey.json",
+      "expected_ok": true,
+      "description": "Receipt content stays valid even when filename references malformed ENS data"
+    }
+  ],
+  "ens_resolution_cases": [
+    {
+      "name": "parseagent.eth",
+      "expected": {
+        "algorithm": "ed25519",
+        "kid": "v1",
+        "signer_name": "runtime.commandlayer.eth"
+      }
+    },
+    {
+      "name": "invalidagent.eth",
+      "error_contains": "cl.receipt.signer missing"
+    },
+    {
+      "name": "malformed.eth",
+      "error_contains": "cl.sig.pub malformed"
+    }
+  ]
+}
