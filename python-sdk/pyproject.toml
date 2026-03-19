@@ -40,11 +40,10 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://commandlayer.org"
-Documentation = "https://github.com/commandlayer/sdk/tree/main/python-sdk"
+Homepage = "https://github.com/commandlayer/sdk"
 Repository = "https://github.com/commandlayer/sdk"
-Issues = "https://github.com/commandlayer/sdk/issues"
-
+Documentation = "https://github.com/commandlayer/sdk#readme"
+Changelog = "https://github.com/commandlayer/sdk/blob/main/CHANGELOG.md"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["commandlayer*"]
