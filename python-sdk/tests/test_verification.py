@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any, cast
 
 import pytest
 
@@ -19,8 +20,8 @@ class FakeResolver:
         return self.records.get((name, key))
 
 
-def load_fixture(name: str) -> dict:
-    return json.loads((VECTORS / name).read_text(encoding="utf-8"))
+def load_fixture(name: str) -> dict[str, Any]:
+    return cast(dict[str, Any], json.loads((VECTORS / name).read_text(encoding="utf-8")))
 
 
 def load_pubkey() -> str:
