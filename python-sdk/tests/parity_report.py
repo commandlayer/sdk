@@ -3,9 +3,14 @@ from __future__ import annotations
 import base64
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
-from commandlayer.verify import parse_ed25519_pubkey, recompute_receipt_hash_sha256, resolve_signer_key, verify_receipt
+from commandlayer.verify import (
+    parse_ed25519_pubkey,
+    recompute_receipt_hash_sha256,
+    resolve_signer_key,
+    verify_receipt,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
 VECTORS = ROOT / "test_vectors"
@@ -30,7 +35,7 @@ resolver = FakeResolver()
 
 
 def load_fixture(name: str) -> dict[str, Any]:
-    return json.loads((VECTORS / name).read_text(encoding="utf-8"))
+    return cast(dict[str, Any], json.loads((VECTORS / name).read_text(encoding="utf-8")))
 
 
 vector_results: list[dict[str, Any]] = []

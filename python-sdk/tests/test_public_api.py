@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any, cast
 
 import httpx
 
@@ -38,8 +39,8 @@ EXPECTED_VERBS = [
 ]
 
 
-def load_fixture(name: str) -> dict:
-    return json.loads((VECTORS / name).read_text(encoding="utf-8"))
+def load_fixture(name: str) -> dict[str, Any]:
+    return cast(dict[str, Any], json.loads((VECTORS / name).read_text(encoding="utf-8")))
 
 
 def load_pubkey() -> str:
@@ -125,7 +126,9 @@ def test_verify_receipt_is_importable_callable_and_matches_vector_contract() -> 
 
     assert callable(verify_receipt)
     assert result["ok"] is True
-    assert result["values"]["recomputed_hash"] == recompute_receipt_hash_sha256(receipt)["hash_sha256"]
+    assert result["values"]["recomputed_hash"] == recompute_receipt_hash_sha256(
+        receipt
+    )["hash_sha256"]
     assert result["values"]["signer_id"] == "runtime.commandlayer.eth"
     assert result["errors"]["verify_error"] is None
 
