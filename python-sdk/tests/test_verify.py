@@ -26,8 +26,8 @@ def _signed_receipt() -> tuple[dict[str, object], str]:
         "status": "success",
         "x402": {
             "verb": "summarize",
-            "version": "1.0.0",
-            "entry": "x402://summarizeagent.eth/summarize/v1.0.0",
+            "version": "1.1.0",
+            "entry": "x402://summarizeagent.eth/summarize/v1.1.0",
         },
         "metadata": {
             "proof": {
