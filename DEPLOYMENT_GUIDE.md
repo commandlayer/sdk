@@ -14,7 +14,7 @@ Current release line:
 Before cutting a release:
 - confirm both SDK packages are on the same version,
 - confirm docs reference the same protocol version and receipt model,
-- confirm shared test vectors still represent the current signed receipt truth,
+- confirm shared test vectors still represent the current signed receipt truth and do not reintroduce x402-first positioning,
 - decide whether the release is docs-only or publishable.
 
 ## 2. Local quality gates
@@ -108,8 +108,8 @@ If the public docs site references installation or verification examples, update
 ## 7. CI expectations
 
 CI should stay green for:
-- TypeScript typecheck/build/tests,
+- TypeScript typecheck/build/package-local tests,
 - Python lint/typecheck/tests,
-- cross-SDK runtime fixture checks.
+- optional cross-SDK runtime fixture checks.
 
 Do not publish if any of those lanes are red.

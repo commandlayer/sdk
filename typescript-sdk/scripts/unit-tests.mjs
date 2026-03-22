@@ -196,7 +196,7 @@ await assertRejects(
 
 const receipt = {
   status: "success",
-  x402: { verb: "summarize", version: "1.1.0", entry: "x402://summarizeagent.eth/summarize/v1.1.0" },
+  x402: { verb: "summarize", version: "1.1.0" },
   result: { summary: "test" },
   metadata: {
     proof: {

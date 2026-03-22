@@ -278,7 +278,6 @@ class CommandLayerClient:
             "x402": {
                 "verb": verb,
                 "version": COMMONS_VERSION,
-                "entry": f"x402://{verb}agent.eth/{verb}/v{COMMONS_VERSION}",
             },
             "actor": body.get("actor", self.actor),
             **body,

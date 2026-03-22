@@ -3,8 +3,7 @@
   "status": "success",
   "x402": {
     "verb": "summarize",
-    "version": "1.1.0",
-    "entry": "x402://parseagent.eth/summarize/v1.1.0"
+    "version": "1.1.0"
   },
   "result": {
     "summary": "fixture"
@@ -14,9 +13,9 @@
       "alg": "ed25519-sha256",
       "canonical": "cl-stable-json-v1",
       "signer_id": "runtime.commandlayer.eth",
-      "hash_sha256": "915ce5bd5d71ac3622a1d3918630dd69ff0d6d22218de84a751817ae60bd54e1",
+      "hash_sha256": "509b71764d0158fab6bb073ed0bf28182bc1fa0227c00dc4ef79a0067e968196",
       "signature_b64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
     },
-    "receipt_id": "915ce5bd5d71ac3622a1d3918630dd69ff0d6d22218de84a751817ae60bd54e1"
+    "receipt_id": "509b71764d0158fab6bb073ed0bf28182bc1fa0227c00dc4ef79a0067e968196"
   }
 }
