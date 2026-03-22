@@ -31,11 +31,11 @@ npm install -g @commandlayer/sdk
 ```ts
 import { createClient } from "@commandlayer/sdk";
 
-const client = createClient({ actor: "quickstart-ts" });
+const client = createClient();
 
 const response = await client.summarize({
-  content: "CommandLayer makes agent execution verifiable.",
-  style: "bullet_points"
+  input: "CommandLayer makes agent execution verifiable.",
+  mode: "brief"
 });
 
 console.log(response.receipt.result?.summary);
@@ -55,7 +55,22 @@ response = client.summarize(
 print(response["receipt"]["result"]["summary"])
 ```
 
-## 3. Inspect the response
+## 3. Inspect the request contract
+
+Protocol-Commons v1.1.0 Commons requests are flat top-level objects:
+
+```json
+{
+  "verb": "summarize",
+  "version": "1.1.0",
+  "input": "CommandLayer makes agent execution verifiable.",
+  "mode": "brief"
+}
+```
+
+Do not send nested `input` objects, `limits`, actor wrappers, or `x402` request metadata for Commons verbs.
+
+## 4. Inspect the response
 
 Both SDKs return the same shape:
 
@@ -83,9 +98,9 @@ Both SDKs return the same shape:
 }
 ```
 
-Use `response.receipt` as the durable protocol artifact. `runtime_metadata` is optional execution context. The retained `x402` object carries Commons verb metadata and is not a commercial feature signal.
+Use `response.receipt` as the durable protocol artifact. `runtime_metadata` is optional execution context. The retained `x402` object carries Commons verb metadata in receipts and is not a request wrapper or commercial feature signal.
 
-## 4. Verify the receipt
+## 5. Verify the receipt
 
 ### TypeScript
 
@@ -118,12 +133,12 @@ Use the same signer-discovery model in both SDKs:
 - signer ENS TXT: `cl.sig.pub`
 - signer ENS TXT: `cl.sig.kid`
 
-## 5. Try the CLI
+## 6. Try the CLI
 
 ```bash
 commandlayer summarize \
-  --content "CommandLayer makes agent execution verifiable." \
-  --style bullet_points \
+  --input "CommandLayer makes agent execution verifiable." \
+  --mode brief \
   --json
 ```
 
@@ -135,7 +150,7 @@ commandlayer verify \
   --public-key "ed25519:BASE64_PUBLIC_KEY"
 ```
 
-## 6. What is stable today?
+## 7. What is stable today?
 
 Stable in this repo:
 - Protocol-Commons v1.1.0 verb surface,

@@ -3,7 +3,7 @@
 Official TypeScript/JavaScript SDK for CommandLayer Commons v1.1.0.
 
 Use this package to:
-- call CommandLayer Commons verbs,
+- call CommandLayer Commons verbs with the canonical flat v1.1.0 request shape,
 - receive the canonical signed `receipt`,
 - capture optional unsigned `runtime_metadata` separately,
 - verify receipts offline or through ENS, and
@@ -22,11 +22,11 @@ Supported runtime: Node.js 20+.
 ```ts
 import { createClient, verifyReceipt } from "@commandlayer/sdk";
 
-const client = createClient({ actor: "docs-example" });
+const client = createClient();
 
 const response = await client.summarize({
-  content: "CommandLayer makes agent execution verifiable.",
-  style: "bullet_points"
+  input: "CommandLayer makes agent execution verifiable.",
+  mode: "brief"
 });
 
 console.log(response.receipt.result?.summary);
@@ -39,6 +39,21 @@ const verification = await verifyReceipt(response.receipt, {
 
 console.log(verification.ok);
 ```
+
+## Commons request shape
+
+Commons v1.1.0 request payloads are flat top-level objects. The SDK now emits the schema contract directly:
+
+```json
+{
+  "verb": "summarize",
+  "version": "1.1.0",
+  "input": "CommandLayer makes agent execution verifiable.",
+  "mode": "brief"
+}
+```
+
+Do not wrap Commons requests in nested `input` objects, `limits`, `actor`, or `x402` request envelopes.
 
 ## Return shape
 
@@ -72,7 +87,7 @@ Client methods return:
 }
 ```
 
-`verifyReceipt()` accepts the canonical `receipt` object. The retained `receipt.x402` block is Commons protocol metadata, not a commercial SDK surface. The SDK also accepts a whole response envelope for legacy compatibility, but new integrations should pass `response.receipt` explicitly.
+`verifyReceipt()` accepts the canonical `receipt` object. The retained `receipt.x402` block is Commons protocol metadata, not a Commons request wrapper. The SDK also accepts a whole response envelope for legacy compatibility, but new integrations should pass `response.receipt` explicitly.
 
 ## Verification modes
 
@@ -105,7 +120,7 @@ The ENS flow resolves:
 The package ships the `commandlayer` CLI.
 
 ```bash
-commandlayer summarize --content "hello" --style bullet_points --json
+commandlayer summarize --input "hello" --mode brief --json
 commandlayer verify --file receipt.json --public-key "ed25519:BASE64_PUBLIC_KEY"
 ```
 

@@ -27,7 +27,7 @@ This repo is aligned to the current CommandLayer v1.1.0 surface:
 - canonical signed receipts as the verification contract payload, and
 - optional `runtime_metadata` as unsigned execution context.
 
-Protocol-Commercial / x402 payment flows are not a first-class SDK surface in this repo today. The retained `receipt.x402` metadata block is part of the Commons protocol schema here; it should not be read as commercial feature coverage.
+Protocol-Commercial / x402 payment flows are not a first-class SDK surface in this repo today. The retained `receipt.x402` metadata block is part of the Commons receipt schema here; it should not be read as a Commons request envelope or commercial feature coverage.
 
 ## Install
 
@@ -52,11 +52,11 @@ Python 3.10+ is supported.
 ```ts
 import { createClient, verifyReceipt } from "@commandlayer/sdk";
 
-const client = createClient({ actor: "my-app" });
+const client = createClient();
 
 const response = await client.summarize({
-  content: "CommandLayer turns agent calls into signed receipts.",
-  style: "bullet_points"
+  input: "CommandLayer turns agent calls into signed receipts.",
+  mode: "brief"
 });
 
 console.log(response.receipt.result?.summary);
@@ -69,6 +69,21 @@ const verification = await verifyReceipt(response.receipt, {
 
 console.log(verification.ok);
 ```
+
+## Commons request contract
+
+The active Protocol-Commons v1.1.0 request contract is flat and top-level:
+
+```json
+{
+  "verb": "summarize",
+  "version": "1.1.0",
+  "input": "CommandLayer turns agent calls into signed receipts.",
+  "mode": "brief"
+}
+```
+
+Commons requests should not be wrapped in nested request bodies, actor envelopes, `limits`, or `x402` request metadata.
 
 ## First call: Python
 
@@ -102,7 +117,7 @@ Client methods now return a command response envelope:
     "status": "success",
     "x402": {
       "verb": "summarize",
-      "version": "1.1.0",
+      "version": "1.1.0"
     },
     "result": {
       "summary": "..."
@@ -129,53 +144,3 @@ Client methods now return a command response envelope:
 The canonical signed object is `receipt`. `runtime_metadata` is optional and unsigned. Verification, persistence, and downstream audit should use the canonical `receipt` object.
 
 The SDK still normalizes older blended runtime responses for compatibility, but that normalization is legacy-only. The repo documents the v1.1.0 envelope as the single canonical public contract.
-
-## Verification
-
-### Offline verification
-
-```ts
-import { verifyReceipt } from "@commandlayer/sdk";
-
-const result = await verifyReceipt(response.receipt, {
-  publicKey: "ed25519:BASE64_PUBLIC_KEY"
-});
-```
-
-### ENS-backed verification
-
-```ts
-const result = await verifyReceipt(response.receipt, {
-  ens: {
-    name: "summarizeagent.eth",
-    rpcUrl: process.env.MAINNET_RPC_URL!
-  }
-});
-```
-
-ENS signer discovery resolves:
-1. `cl.receipt.signer` on the agent ENS name,
-2. `cl.sig.pub` on the signer ENS name,
-3. `cl.sig.kid` on the signer ENS name.
-
-## CLI
-
-Install the npm package and use the bundled CLI:
-
-```bash
-commandlayer summarize --content "Test text" --style bullet_points --json
-commandlayer verify --file receipt.json --public-key "ed25519:BASE64_PUBLIC_KEY"
-```
-
-The CLI is intended for demos, CI smoke tests, debugging, and reproducing SDK flows without writing app code.
-
-## Repo guide
-
-- Fast onboarding: `QUICKSTART.md`
-- Cookbook examples: `EXAMPLES.md`
-- Maintainer / architecture notes: `DEVELOPER_EXPERIENCE.md`
-- Release guide: `RELEASE_GUIDE.md`
-- Deployment checklist: `DEPLOYMENT_GUIDE.md`
-- Changelog: `CHANGELOG.md`
-- TypeScript package docs: `typescript-sdk/README.md`
-- Python package docs: `python-sdk/README.md`

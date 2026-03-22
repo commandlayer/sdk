@@ -116,6 +116,7 @@ export type VerifyOptions = {
 
 export type ClientOptions = {
   runtime?: string;
+  /** @deprecated Commons v1.1.0 requests do not include actor metadata. */
   actor?: string;
   timeoutMs?: number;
   fetchImpl?: typeof fetch;
@@ -137,7 +138,50 @@ const VERBS = [
   "fetch"
 ] as const;
 
+const VERB_MODES = {
+  summarize: ["brief", "detailed", "bullets"],
+  analyze: ["standard", "deep", "compare"],
+  classify: ["single", "multi", "hierarchical"],
+  clean: ["normalize", "redact", "sanitize"],
+  convert: ["plain", "structured", "lossless"],
+  describe: ["short", "standard", "detailed"],
+  explain: ["simple", "technical", "stepwise"],
+  format: ["plain", "markdown", "json"],
+  parse: ["best_effort", "strict", "extract"],
+  fetch: ["text", "json", "html", "raw"]
+} as const;
+
 type Verb = (typeof VERBS)[number];
+export type VerbModeMap = { [K in Verb]: (typeof VERB_MODES)[K][number] };
+
+export type CommonsRequest<V extends Verb = Verb> = {
+  verb: V;
+  version: typeof commonsVersion;
+  input: string;
+  mode?: VerbModeMap[V];
+};
+
+export type SummarizeRequest = CommonsRequest<"summarize">;
+export type AnalyzeRequest = CommonsRequest<"analyze">;
+export type ClassifyRequest = CommonsRequest<"classify">;
+export type CleanRequest = CommonsRequest<"clean">;
+export type ConvertRequest = CommonsRequest<"convert">;
+export type DescribeRequest = CommonsRequest<"describe">;
+export type ExplainRequest = CommonsRequest<"explain">;
+export type FormatRequest = CommonsRequest<"format">;
+export type ParseRequest = CommonsRequest<"parse">;
+export type FetchRequest = CommonsRequest<"fetch">;
+
+export type SummarizeOptions = { input: string; mode?: SummarizeRequest["mode"] };
+export type AnalyzeOptions = { input: string; mode?: AnalyzeRequest["mode"] };
+export type ClassifyOptions = { input: string; mode?: ClassifyRequest["mode"] };
+export type CleanOptions = { input: string; mode?: CleanRequest["mode"] };
+export type ConvertOptions = { input: string; mode?: ConvertRequest["mode"] };
+export type DescribeOptions = { input: string; mode?: DescribeRequest["mode"] };
+export type ExplainOptions = { input: string; mode?: ExplainRequest["mode"] };
+export type FormatOptions = { input: string; mode?: FormatRequest["mode"] };
+export type ParseOptions = { input: string; mode?: ParseRequest["mode"] };
+export type FetchOptions = { input: string; mode?: FetchRequest["mode"] };
 
 type LegacyBlendedReceipt = CanonicalReceipt & {
   trace?: RuntimeMetadata;
@@ -145,6 +189,25 @@ type LegacyBlendedReceipt = CanonicalReceipt & {
 
 function normalizeBase(url: string) {
   return String(url || "").replace(/\/+$/, "");
+}
+
+function assertNonEmptyInput(input: string, verb: Verb): string {
+  if (typeof input !== "string" || input.length < 1) {
+    throw new CommandLayerError(`${verb} input must be a non-empty string`, 400);
+  }
+  return input;
+}
+
+export function buildCommonsRequest<V extends Verb>(verb: V, options: { input: string; mode?: VerbModeMap[V] }): CommonsRequest<V> {
+  const payload: CommonsRequest<V> = {
+    verb,
+    version: commonsVersion,
+    input: assertNonEmptyInput(options.input, verb)
+  };
+  if (options.mode !== undefined) {
+    payload.mode = options.mode;
+  }
+  return payload;
 }
 
 export function canonicalizeStableJsonV1(value: unknown): string {
@@ -445,102 +508,22 @@ export class CommandLayerClient {
     }
   }
 
-  async summarize(opts: { content: string; style?: string; format?: string; maxTokens?: number }) {
-    return this.call("summarize", {
-      input: { content: opts.content, summary_style: opts.style, format_hint: opts.format },
-      limits: { max_output_tokens: opts.maxTokens ?? 1000 }
-    });
-  }
+  async summarize(opts: SummarizeOptions) { return this.call("summarize", buildCommonsRequest("summarize", opts)); }
+  async analyze(opts: AnalyzeOptions) { return this.call("analyze", buildCommonsRequest("analyze", opts)); }
+  async classify(opts: ClassifyOptions) { return this.call("classify", buildCommonsRequest("classify", opts)); }
+  async clean(opts: CleanOptions) { return this.call("clean", buildCommonsRequest("clean", opts)); }
+  async convert(opts: ConvertOptions) { return this.call("convert", buildCommonsRequest("convert", opts)); }
+  async describe(opts: DescribeOptions) { return this.call("describe", buildCommonsRequest("describe", opts)); }
+  async explain(opts: ExplainOptions) { return this.call("explain", buildCommonsRequest("explain", opts)); }
+  async format(opts: FormatOptions) { return this.call("format", buildCommonsRequest("format", opts)); }
+  async parse(opts: ParseOptions) { return this.call("parse", buildCommonsRequest("parse", opts)); }
+  async fetch(opts: FetchOptions) { return this.call("fetch", buildCommonsRequest("fetch", opts)); }
 
-  async analyze(opts: { content: string; goal?: string; hints?: string[]; maxTokens?: number }) {
-    return this.call("analyze", {
-      input: opts.content,
-      ...(opts.goal ? { goal: opts.goal } : {}),
-      ...(opts.hints ? { hints: opts.hints } : {}),
-      limits: { max_output_tokens: opts.maxTokens ?? 1000 }
-    });
-  }
-
-  async classify(opts: { content: string; maxLabels?: number; maxTokens?: number }) {
-    return this.call("classify", {
-      actor: this.actor,
-      input: { content: opts.content },
-      limits: { max_labels: opts.maxLabels ?? 5, max_output_tokens: opts.maxTokens ?? 1000 }
-    });
-  }
-
-  async clean(opts: { content: string; operations?: string[]; maxTokens?: number }) {
-    return this.call("clean", {
-      input: { content: opts.content, operations: opts.operations ?? ["normalize_newlines", "collapse_whitespace", "trim"] },
-      limits: { max_output_tokens: opts.maxTokens ?? 1000 }
-    });
-  }
-
-  async convert(opts: { content: string; from: string; to: string; maxTokens?: number }) {
-    return this.call("convert", {
-      input: { content: opts.content, source_format: opts.from, target_format: opts.to },
-      limits: { max_output_tokens: opts.maxTokens ?? 1000 }
-    });
-  }
-
-  async describe(opts: { subject: string; audience?: string; detail?: "short" | "medium" | "detailed"; maxTokens?: number }) {
-    return this.call("describe", {
-      input: { subject: (opts.subject || "").slice(0, 140), audience: opts.audience ?? "general", detail_level: opts.detail ?? "medium" },
-      limits: { max_output_tokens: opts.maxTokens ?? 1000 }
-    });
-  }
-
-  async explain(opts: { subject: string; audience?: string; style?: string; detail?: "short" | "medium" | "detailed"; maxTokens?: number }) {
-    return this.call("explain", {
-      input: {
-        subject: (opts.subject || "").slice(0, 140),
-        audience: opts.audience ?? "general",
-        style: opts.style ?? "step-by-step",
-        detail_level: opts.detail ?? "medium"
-      },
-      limits: { max_output_tokens: opts.maxTokens ?? 1000 }
-    });
-  }
-
-  async format(opts: { content: string; to: string; maxTokens?: number }) {
-    return this.call("format", {
-      input: { content: opts.content, target_style: opts.to },
-      limits: { max_output_tokens: opts.maxTokens ?? 1000 }
-    });
-  }
-
-  async parse(opts: { content: string; contentType?: "json" | "yaml" | "text"; mode?: "best_effort" | "strict"; targetSchema?: string; maxTokens?: number }) {
-    return this.call("parse", {
-      input: {
-        content: opts.content,
-        content_type: opts.contentType ?? "text",
-        mode: opts.mode ?? "best_effort",
-        ...(opts.targetSchema ? { target_schema: opts.targetSchema } : {})
-      },
-      limits: { max_output_tokens: opts.maxTokens ?? 1000 }
-    });
-  }
-
-  async fetch(opts: { source: string; query?: string; include_metadata?: boolean; maxTokens?: number }) {
-    return this.call("fetch", {
-      input: {
-        source: opts.source,
-        ...(opts.query !== undefined ? { query: opts.query } : {}),
-        ...(opts.include_metadata !== undefined ? { include_metadata: opts.include_metadata } : {})
-      },
-      limits: { max_output_tokens: opts.maxTokens ?? 1000 }
-    });
-  }
-
-  async call(verb: Verb, body: Record<string, unknown>): Promise<CommandResponse> {
+  async call<V extends Verb>(verb: V, body: CommonsRequest<V>): Promise<CommandResponse> {
     if (!VERBS.includes(verb)) throw new CommandLayerError(`Unsupported verb: ${verb}`, 400);
     this.ensureVerifyConfigIfEnabled();
 
-    const payload = {
-      x402: { verb, version: commonsVersion },
-      ...(body.actor ? { actor: body.actor } : { actor: this.actor }),
-      ...body
-    };
+    const payload = buildCommonsRequest(verb, { input: body.input, ...(body.mode !== undefined ? { mode: body.mode } : {}) });
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);

@@ -38,30 +38,27 @@ function createConfiguredClient() {
 }
 
 function withCommonOptions(cmd: Command) {
-  return cmd.requiredOption("--content <text>", "Input content").option("--max-tokens <n>", "Max output tokens", "1000");
+  return cmd.requiredOption("--input <text>", "Flat Commons input string");
 }
 
-withCommonOptions(program.command("summarize").description("Summarize content").option("--style <style>", "Summary style").option("--format <format>", "Format hint")).action(async (opts) => {
+withCommonOptions(program.command("summarize").description("Summarize content").option("--mode <mode>", "Protocol-Commons summarize mode")).action(async (opts) => {
   const response = await createConfiguredClient().summarize({
-    content: opts.content,
-    style: opts.style,
-    format: opts.format,
-    maxTokens: parseIntSafe(opts.maxTokens, 1000)
+    input: opts.input,
+    mode: opts.mode
   });
   printCommandResponse(response, !!program.opts().json);
 });
 
-withCommonOptions(program.command("analyze").description("Analyze content").option("--goal <goal>", "Optional analysis goal")).action(async (opts) => {
+withCommonOptions(program.command("analyze").description("Analyze content").option("--mode <mode>", "Protocol-Commons analyze mode")).action(async (opts) => {
   const response = await createConfiguredClient().analyze({
-    content: opts.content,
-    goal: opts.goal,
-    maxTokens: parseIntSafe(opts.maxTokens, 1000)
+    input: opts.input,
+    mode: opts.mode
   });
   printCommandResponse(response, !!program.opts().json);
 });
 
-program.command("call").description("Call a verb with a raw JSON payload").requiredOption("--verb <verb>", "Verb name").requiredOption("--body <json>", "Request body JSON").action(async (opts) => {
-  const response = await createConfiguredClient().call(opts.verb, JSON.parse(opts.body) as Record<string, unknown>);
+program.command("call").description("Call a verb with a raw Protocol-Commons JSON payload").requiredOption("--verb <verb>", "Verb name").requiredOption("--body <json>", "Flat request body JSON").action(async (opts) => {
+  const response = await createConfiguredClient().call(opts.verb, JSON.parse(opts.body) as any);
   printCommandResponse(response, !!program.opts().json);
 });
 

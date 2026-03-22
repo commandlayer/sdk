@@ -88,6 +88,7 @@ const {
   resolveSignerKey,
   CommandLayerError,
   CommandLayerClient,
+  buildCommonsRequest,
 } = require("../dist/index.cjs");
 
 // ---- Canonicalization ----
@@ -191,6 +192,52 @@ await assertRejects(
   "ENS TXT cl.sig.pub malformed",
   "resolveSignerKey throws clear error when cl.sig.pub malformed"
 );
+
+
+// ---- Commons request construction ----
+
+const summarizeRequest = buildCommonsRequest("summarize", { input: "Protocol-Commons v1.1.0 uses a flat request shape.", mode: "brief" });
+assert(summarizeRequest.verb === "summarize", "buildCommonsRequest sets summarize verb");
+assert(summarizeRequest.version === "1.1.0", "buildCommonsRequest sets protocol version");
+assert(summarizeRequest.input === "Protocol-Commons v1.1.0 uses a flat request shape.", "buildCommonsRequest keeps flat input string");
+assert(summarizeRequest.mode === "brief", "buildCommonsRequest keeps summarize mode");
+assert(!("x402" in summarizeRequest), "buildCommonsRequest omits x402 wrapper");
+assert(!("actor" in summarizeRequest), "buildCommonsRequest omits actor wrapper");
+assertThrows(
+  () => buildCommonsRequest("summarize", { input: "" }),
+  "buildCommonsRequest rejects empty input"
+);
+
+const outboundCalls = [];
+const transportClient = new CommandLayerClient({
+  runtime: "https://runtime.example",
+  fetchImpl: async (url, init) => {
+    outboundCalls.push({ url, init });
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          receipt: {
+            status: "success",
+            x402: { verb: "summarize", version: "1.1.0" },
+            result: { summary: "ok" },
+            metadata: {}
+          }
+        };
+      }
+    };
+  }
+});
+await transportClient.summarize({ input: "Flat request body", mode: "brief" });
+const sent = JSON.parse(outboundCalls[0].init.body);
+assert(outboundCalls[0].url === "https://runtime.example/summarize/v1.1.0", "client.summarize uses canonical runtime path");
+assert(sent.verb === "summarize", "client.summarize sends flat verb");
+assert(sent.version === "1.1.0", "client.summarize sends flat version");
+assert(sent.input === "Flat request body", "client.summarize sends flat input string");
+assert(sent.mode === "brief", "client.summarize sends flat mode");
+assert(!("x402" in sent), "client.summarize does not send x402 wrapper");
+assert(!("actor" in sent), "client.summarize does not send actor wrapper");
 
 // ---- Receipt verification (end-to-end) ----
 

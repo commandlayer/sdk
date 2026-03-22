@@ -31,7 +31,7 @@ runCase("help output", ["--help"], {
 
 runCase("argument validation", ["summarize"], {
   exitCode: 1,
-  includes: ["required option '--content <text>' not specified"]
+  includes: ["required option '--input <text>' not specified"]
 });
 
 runCase("bad JSON path", ["call", "--verb", "summarize", "--body", "{not-json}"], {
