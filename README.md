@@ -27,7 +27,7 @@ This repo is aligned to the current CommandLayer v1.1.0 surface:
 - canonical signed receipts as the verification contract payload, and
 - optional `runtime_metadata` as unsigned execution context.
 
-Protocol-Commercial / x402 payment flows are not a first-class SDK surface in this repo today. The retained `receipt.x402` metadata block is part of the Commons protocol schema here; it should not be read as commercial feature coverage.
+Protocol-Commercial / x402 payment flows are not a first-class SDK surface in this repo today. If a runtime still includes `receipt.x402`, treat it as compatibility metadata rather than the primary Commons contract surface or a commercial feature signal.
 
 ## Install
 
@@ -60,7 +60,7 @@ const response = await client.summarize({
 });
 
 console.log(response.receipt.result?.summary);
-console.log(response.receipt.metadata?.receipt_id);
+console.log(response.receipt.metadata?.proof?.hash_sha256);
 console.log(response.runtime_metadata?.duration_ms);
 
 const verification = await verifyReceipt(response.receipt, {
@@ -82,7 +82,7 @@ response = client.summarize(
 )
 
 print(response["receipt"]["result"]["summary"])
-print(response["receipt"]["metadata"]["receipt_id"])
+print(response["receipt"]["metadata"]["proof"]["hash_sha256"])
 print(response.get("runtime_metadata", {}).get("duration_ms"))
 
 verification = verify_receipt(
@@ -100,15 +100,12 @@ Client methods now return a command response envelope:
 {
   "receipt": {
     "status": "success",
-    "x402": {
-      "verb": "summarize",
-      "version": "1.1.0",
-    },
+    "verb": "summarize",
+    "schema_version": "1.1.0",
     "result": {
       "summary": "..."
     },
     "metadata": {
-      "receipt_id": "...",
       "proof": {
         "alg": "ed25519-sha256",
         "canonical": "cl-stable-json-v1",
@@ -126,7 +123,7 @@ Client methods now return a command response envelope:
 }
 ```
 
-The canonical signed object is `receipt`. `runtime_metadata` is optional and unsigned. Verification, persistence, and downstream audit should use the canonical `receipt` object.
+The canonical signed object is `receipt`. In Commons v1.1.0 the stable receipt identity comes from the recomputed proof hash (`metadata.proof.hash_sha256`), while `runtime_metadata` stays optional and unsigned.
 
 The SDK still normalizes older blended runtime responses for compatibility, but that normalization is legacy-only. The repo documents the v1.1.0 envelope as the single canonical public contract.
 

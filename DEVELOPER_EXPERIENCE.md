@@ -23,9 +23,9 @@ This document is for maintainers and advanced integrators. Start with `README.md
 
 The signed payload includes:
 - `status`,
-- the protocol metadata block at `x402` (Commons verb/version metadata; not a commercial SDK claim),
-- `result` or `error`,
-- `metadata.receipt_id`, and
+- the flat Commons fields `verb`, `schema_version`, and `status`,
+- verb-specific receipt fields or `error`,
+- optional compatibility metadata such as `x402`, and
 - `metadata.proof` with `alg`, `canonical`, `signer_id`, `hash_sha256`, and `signature_b64`.
 
 ### Runtime metadata
@@ -61,7 +61,7 @@ If one SDK intentionally diverges, document it in that package README and in rel
 ## Verification rules
 
 Both SDKs use the same verification contract:
-1. strip `receipt_id` and the signed hash/signature fields from the receipt,
+1. strip optional runtime identifiers such as `receipt_id` plus the signed hash/signature fields from the receipt,
 2. canonicalize with `cl-stable-json-v1`,
 3. recompute `sha256`,
 4. compare against `metadata.proof.hash_sha256`,

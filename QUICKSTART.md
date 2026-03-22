@@ -63,10 +63,10 @@ Both SDKs return the same shape:
 {
   "receipt": {
     "status": "success",
-    "x402": { "verb": "summarize", "version": "1.1.0" },
+    "verb": "summarize",
+    "schema_version": "1.1.0",
     "result": { "summary": "..." },
     "metadata": {
-      "receipt_id": "...",
       "proof": {
         "alg": "ed25519-sha256",
         "canonical": "cl-stable-json-v1",
@@ -83,7 +83,7 @@ Both SDKs return the same shape:
 }
 ```
 
-Use `response.receipt` as the durable protocol artifact. `runtime_metadata` is optional execution context. The retained `x402` object carries Commons verb metadata and is not a commercial feature signal.
+Use `response.receipt` as the durable protocol artifact. `runtime_metadata` is optional execution context. If present, `x402` is compatibility metadata and not the primary Commons contract surface.
 
 ## 4. Verify the receipt
 

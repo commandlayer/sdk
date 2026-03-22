@@ -196,7 +196,8 @@ await assertRejects(
 
 const receipt = {
   status: "success",
-  x402: { verb: "summarize", version: "1.1.0" },
+  verb: "summarize",
+  schema_version: "1.1.0",
   result: { summary: "test" },
   metadata: {
     proof: {
@@ -213,13 +214,13 @@ const receiptSig = nacl.sign.detached(new Uint8Array(receiptMsg), kp.secretKey);
 
 receipt.metadata.proof.hash_sha256 = hash_sha256;
 receipt.metadata.proof.signature_b64 = Buffer.from(receiptSig).toString("base64");
-receipt.metadata.receipt_id = hash_sha256;
+receipt.metadata.receipt_id = "runtime-generated-id";
 
 const vr = await verifyReceipt(receipt, { publicKey: `ed25519:${b64Key}` });
 assert(vr.ok === true, "verifyReceipt ok for valid receipt (explicit key)");
 assert(vr.checks.hash_matches === true, "verifyReceipt hash matches");
 assert(vr.checks.signature_valid === true, "verifyReceipt signature valid");
-assert(vr.checks.receipt_id_matches === true, "verifyReceipt receipt_id matches");
+assert(vr.checks.receipt_id_matches === false, "verifyReceipt treats receipt_id mismatch as informational");
 
 const vrEns = await verifyReceipt(receipt, {
   ens: {
@@ -237,9 +238,29 @@ const vr2 = await verifyReceipt(tamperedReceipt, { publicKey: `ed25519:${b64Key}
 assert(vr2.ok === false, "verifyReceipt rejects tampered receipt");
 assert(vr2.checks.hash_matches === false, "tampered receipt hash mismatch");
 
+// ---- Client request shaping ----
+
+const captured = [];
+const client = new CommandLayerClient({
+  runtime: "https://runtime.commandlayer.org",
+  actor: "tester",
+  fetchImpl: async (url, init) => {
+    captured.push({ url: String(url), body: JSON.parse(String(init?.body || "{}")) });
+    return new Response(JSON.stringify({ receipt: { status: "success", verb: "summarize", schema_version: "1.1.0", metadata: { proof: { alg: "ed25519-sha256", canonical: "cl-stable-json-v1" } } } }), { status: 200, headers: { "Content-Type": "application/json" } });
+  }
+});
+
+await client.summarize({ content: "hello", style: "bullet_points" });
+assert(captured[0].url === "https://runtime.commandlayer.org/v1.1.0/summarize", "client uses versioned Commons-first endpoint");
+assert(captured[0].body.verb === "summarize", "client sends flat verb field");
+assert(captured[0].body.schema_version === "1.1.0", "client sends flat schema_version field");
+assert(captured[0].body.content === "hello", "client flattens request content");
+assert(captured[0].body.summary_style === "bullet_points", "client flattens request options");
+assert(!("x402" in captured[0].body), "client does not send legacy x402 envelope on canonical requests");
+
 // ---- Client verb validation ----
 
-const client = new CommandLayerClient();
+
 try {
   await client.call("nonexistent", {});
   failed++;

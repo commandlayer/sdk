@@ -25,6 +25,8 @@ export type ReceiptMetadata = {
 };
 
 export type CanonicalReceipt<T = unknown> = {
+  verb?: string;
+  schema_version?: string;
   status: "success" | "error" | string;
   x402?: {
     verb?: string;
@@ -37,6 +39,13 @@ export type CanonicalReceipt<T = unknown> = {
   result?: T;
   error?: unknown;
   metadata?: ReceiptMetadata;
+  [k: string]: unknown;
+};
+
+export type CanonicalRequest = {
+  verb: string;
+  schema_version: string;
+  actor?: string;
   [k: string]: unknown;
 };
 
@@ -60,7 +69,7 @@ export type CommandResponse<T = unknown> = {
 export type VerifyChecks = {
   hash_matches: boolean;
   signature_valid: boolean;
-  receipt_id_matches: boolean;
+  receipt_id_matches: boolean | null;
   alg_matches: boolean;
   canonical_matches: boolean;
 };
@@ -307,6 +316,27 @@ export function recomputeReceiptHashSha256(receiptLike: CanonicalReceipt | Comma
   return { canonical, hash_sha256: sha256HexUtf8(canonical) };
 }
 
+function inferReceiptVerb(receipt: CanonicalReceipt | null | undefined): string | null {
+  if (typeof receipt?.verb === "string") return receipt.verb;
+  return typeof receipt?.x402?.verb === "string" ? receipt.x402.verb : null;
+}
+
+function buildRequestPayload(verb: Verb, body: Record<string, unknown>, actor: string): CanonicalRequest {
+  return {
+    verb,
+    schema_version: commonsVersion,
+    ...(body.actor ? { actor: body.actor as string } : { actor }),
+    ...body
+  };
+}
+
+function requestUrls(runtime: string, verb: Verb): string[] {
+  return [
+    `${runtime}/v${commonsVersion}/${verb}`,
+    `${runtime}/${verb}/v${commonsVersion}`
+  ];
+}
+
 export async function verifyReceipt(
   receiptLike: CanonicalReceipt | CommandResponse,
   opts: VerifyOptions = {}
@@ -324,7 +354,7 @@ export async function verifyReceipt(
     const { hash_sha256: recomputedHash } = recomputeReceiptHashSha256(receipt);
     const hashMatches = claimedHash ? recomputedHash === claimedHash : false;
     const receiptId = typeof receipt.metadata?.receipt_id === "string" ? receipt.metadata.receipt_id : null;
-    const receiptIdMatches = claimedHash ? receiptId === claimedHash : false;
+    const receiptIdMatches = claimedHash && receiptId ? receiptId === claimedHash : null;
 
     let pubkey: Uint8Array | null = null;
     let pubkey_source: "explicit" | "ens" | null = null;
@@ -360,7 +390,7 @@ export async function verifyReceipt(
     }
 
     return {
-      ok: algMatches && canonicalMatches && hashMatches && receiptIdMatches && signature_valid,
+      ok: algMatches && canonicalMatches && hashMatches && signature_valid,
       checks: {
         hash_matches: hashMatches,
         signature_valid,
@@ -369,7 +399,7 @@ export async function verifyReceipt(
         canonical_matches: canonicalMatches
       },
       values: {
-        verb: typeof receipt.x402?.verb === "string" ? receipt.x402.verb : null,
+        verb: inferReceiptVerb(receipt),
         signer_id,
         alg,
         canonical,
@@ -397,7 +427,7 @@ export async function verifyReceipt(
         canonical_matches: false
       },
       values: {
-        verb: typeof receipt?.x402?.verb === "string" ? receipt.x402.verb : null,
+        verb: inferReceiptVerb(receipt),
         signer_id: typeof receipt?.metadata?.proof?.signer_id === "string" ? receipt.metadata.proof.signer_id : null,
         alg: typeof receipt?.metadata?.proof?.alg === "string" ? receipt.metadata.proof.alg : null,
         canonical: typeof receipt?.metadata?.proof?.canonical === "string" ? receipt.metadata.proof.canonical : null,
@@ -447,88 +477,90 @@ export class CommandLayerClient {
 
   async summarize(opts: { content: string; style?: string; format?: string; maxTokens?: number }) {
     return this.call("summarize", {
-      input: { content: opts.content, summary_style: opts.style, format_hint: opts.format },
-      limits: { max_output_tokens: opts.maxTokens ?? 1000 }
+      content: opts.content,
+      ...(opts.style ? { summary_style: opts.style } : {}),
+      ...(opts.format ? { format_hint: opts.format } : {}),
+      max_output_tokens: opts.maxTokens ?? 1000
     });
   }
 
   async analyze(opts: { content: string; goal?: string; hints?: string[]; maxTokens?: number }) {
     return this.call("analyze", {
-      input: opts.content,
+      content: opts.content,
       ...(opts.goal ? { goal: opts.goal } : {}),
       ...(opts.hints ? { hints: opts.hints } : {}),
-      limits: { max_output_tokens: opts.maxTokens ?? 1000 }
+      max_output_tokens: opts.maxTokens ?? 1000
     });
   }
 
   async classify(opts: { content: string; maxLabels?: number; maxTokens?: number }) {
     return this.call("classify", {
-      actor: this.actor,
-      input: { content: opts.content },
-      limits: { max_labels: opts.maxLabels ?? 5, max_output_tokens: opts.maxTokens ?? 1000 }
+      content: opts.content,
+      max_labels: opts.maxLabels ?? 5,
+      max_output_tokens: opts.maxTokens ?? 1000
     });
   }
 
   async clean(opts: { content: string; operations?: string[]; maxTokens?: number }) {
     return this.call("clean", {
-      input: { content: opts.content, operations: opts.operations ?? ["normalize_newlines", "collapse_whitespace", "trim"] },
-      limits: { max_output_tokens: opts.maxTokens ?? 1000 }
+      content: opts.content,
+      operations: opts.operations ?? ["normalize_newlines", "collapse_whitespace", "trim"],
+      max_output_tokens: opts.maxTokens ?? 1000
     });
   }
 
   async convert(opts: { content: string; from: string; to: string; maxTokens?: number }) {
     return this.call("convert", {
-      input: { content: opts.content, source_format: opts.from, target_format: opts.to },
-      limits: { max_output_tokens: opts.maxTokens ?? 1000 }
+      content: opts.content,
+      source_format: opts.from,
+      target_format: opts.to,
+      max_output_tokens: opts.maxTokens ?? 1000
     });
   }
 
   async describe(opts: { subject: string; audience?: string; detail?: "short" | "medium" | "detailed"; maxTokens?: number }) {
     return this.call("describe", {
-      input: { subject: (opts.subject || "").slice(0, 140), audience: opts.audience ?? "general", detail_level: opts.detail ?? "medium" },
-      limits: { max_output_tokens: opts.maxTokens ?? 1000 }
+      subject: (opts.subject || "").slice(0, 140),
+      audience: opts.audience ?? "general",
+      detail_level: opts.detail ?? "medium",
+      max_output_tokens: opts.maxTokens ?? 1000
     });
   }
 
   async explain(opts: { subject: string; audience?: string; style?: string; detail?: "short" | "medium" | "detailed"; maxTokens?: number }) {
     return this.call("explain", {
-      input: {
-        subject: (opts.subject || "").slice(0, 140),
-        audience: opts.audience ?? "general",
-        style: opts.style ?? "step-by-step",
-        detail_level: opts.detail ?? "medium"
-      },
-      limits: { max_output_tokens: opts.maxTokens ?? 1000 }
+      subject: (opts.subject || "").slice(0, 140),
+      audience: opts.audience ?? "general",
+      style: opts.style ?? "step-by-step",
+      detail_level: opts.detail ?? "medium",
+      max_output_tokens: opts.maxTokens ?? 1000
     });
   }
 
   async format(opts: { content: string; to: string; maxTokens?: number }) {
     return this.call("format", {
-      input: { content: opts.content, target_style: opts.to },
-      limits: { max_output_tokens: opts.maxTokens ?? 1000 }
+      content: opts.content,
+      target_style: opts.to,
+      max_output_tokens: opts.maxTokens ?? 1000
     });
   }
 
   async parse(opts: { content: string; contentType?: "json" | "yaml" | "text"; mode?: "best_effort" | "strict"; targetSchema?: string; maxTokens?: number }) {
     return this.call("parse", {
-      input: {
-        content: opts.content,
-        content_type: opts.contentType ?? "text",
-        mode: opts.mode ?? "best_effort",
-        ...(opts.targetSchema ? { target_schema: opts.targetSchema } : {})
-      },
-      limits: { max_output_tokens: opts.maxTokens ?? 1000 }
+      content: opts.content,
+      content_type: opts.contentType ?? "text",
+      mode: opts.mode ?? "best_effort",
+      ...(opts.targetSchema ? { target_schema: opts.targetSchema } : {}),
+      max_output_tokens: opts.maxTokens ?? 1000
     });
   }
 
   async fetch(opts: { source: string; query?: string; include_metadata?: boolean; maxTokens?: number }) {
     return this.call("fetch", {
-      input: {
-        source: opts.source,
-        ...(opts.query !== undefined ? { query: opts.query } : {}),
-        ...(opts.include_metadata !== undefined ? { include_metadata: opts.include_metadata } : {})
-      },
-      limits: { max_output_tokens: opts.maxTokens ?? 1000 }
+      source: opts.source,
+      ...(opts.query !== undefined ? { query: opts.query } : {}),
+      ...(opts.include_metadata !== undefined ? { include_metadata: opts.include_metadata } : {}),
+      max_output_tokens: opts.maxTokens ?? 1000
     });
   }
 
@@ -536,35 +568,44 @@ export class CommandLayerClient {
     if (!VERBS.includes(verb)) throw new CommandLayerError(`Unsupported verb: ${verb}`, 400);
     this.ensureVerifyConfigIfEnabled();
 
-    const payload = {
-      x402: { verb, version: commonsVersion },
-      ...(body.actor ? { actor: body.actor } : { actor: this.actor }),
-      ...body
-    };
+    const payload = buildRequestPayload(verb, body, this.actor);
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
 
     try {
-      const response = await this.fetchImpl(`${this.runtime}/${verb}/v${commonsVersion}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "User-Agent": `commandlayer-js/${packageVersion}` },
-        body: JSON.stringify(payload),
-        signal: controller.signal
-      });
-
+      let response: Response | null = null;
       let data: unknown;
-      try {
-        data = await response.json();
-      } catch {
-        if (!response.ok) throw new CommandLayerError(`HTTP ${response.status} (non-JSON response)`, response.status);
-        throw new CommandLayerError("Runtime returned non-JSON response", response.status);
+      let lastError: CommandLayerError | null = null;
+
+      for (const url of requestUrls(this.runtime, verb)) {
+        response = await this.fetchImpl(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "User-Agent": `commandlayer-js/${packageVersion}` },
+          body: JSON.stringify(payload),
+          signal: controller.signal
+        });
+
+        try {
+          data = await response.json();
+        } catch {
+          if (!response.ok) {
+            lastError = new CommandLayerError(`HTTP ${response.status} (non-JSON response)`, response.status);
+            if (response.status === 404) continue;
+            throw lastError;
+          }
+          throw new CommandLayerError("Runtime returned non-JSON response", response.status);
+        }
+
+        if (response.ok) break;
+
+        const detail = data as Record<string, any>;
+        lastError = new CommandLayerError(detail?.message || detail?.error?.message || `HTTP ${response.status}`, response.status, data);
+        if (response.status === 404) continue;
+        throw lastError;
       }
 
-      if (!response.ok) {
-        const detail = data as Record<string, any>;
-        throw new CommandLayerError(detail?.message || detail?.error?.message || `HTTP ${response.status}`, response.status, data);
-      }
+      if (!response || !response.ok) throw lastError ?? new CommandLayerError("Runtime request failed", 502);
 
       const normalized = normalizeCommandResponse(data);
       if (this.verifyReceipts) {

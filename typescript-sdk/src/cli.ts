@@ -22,7 +22,8 @@ function printCommandResponse(response: CommandResponse, jsonOutput: boolean) {
     return;
   }
   console.log(`status: ${response.receipt.status}`);
-  if (response.receipt.metadata?.receipt_id) console.log(`receipt_id: ${response.receipt.metadata.receipt_id}`);
+  if (response.receipt.metadata?.proof?.hash_sha256) console.log(`proof_hash: ${response.receipt.metadata.proof.hash_sha256}`);
+  else if (response.receipt.metadata?.receipt_id) console.log(`receipt_id: ${response.receipt.metadata.receipt_id}`);
   if (response.runtime_metadata?.duration_ms !== undefined) {
     console.log(`duration_ms: ${response.runtime_metadata.duration_ms}`);
   }

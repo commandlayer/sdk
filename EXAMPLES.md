@@ -1,6 +1,6 @@
 # CommandLayer SDK Examples
 
-Canonical examples for the CommandLayer SDK repo. These examples keep the Commons v1.1.0 story receipt-first: `receipt` is signed, `runtime_metadata` is optional and unsigned, and the `x402` object is protocol metadata rather than a commercial SDK surface.
+Canonical examples for the CommandLayer SDK repo. These examples keep the Commons v1.1.0 story receipt-first: `receipt` is signed, `runtime_metadata` is optional and unsigned, and any legacy `x402` object is only compatibility metadata rather than a commercial SDK surface.
 
 All examples in this file target:
 - Protocol-Commons v1.1.0,
@@ -13,15 +13,12 @@ All examples in this file target:
 {
   "receipt": {
     "status": "success",
-    "x402": {
-      "verb": "summarize",
-      "version": "1.1.0",
-    },
+    "verb": "summarize",
+    "schema_version": "1.1.0",
     "result": {
       "summary": "..."
     },
     "metadata": {
-      "receipt_id": "...",
       "proof": {
         "alg": "ed25519-sha256",
         "canonical": "cl-stable-json-v1",
