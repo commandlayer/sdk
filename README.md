@@ -27,7 +27,7 @@ This repo is aligned to the current CommandLayer v1.1.0 surface:
 - canonical signed receipts as the verification contract payload, and
 - optional `runtime_metadata` as unsigned execution context.
 
-Protocol-Commercial / x402 payment flows are not a first-class SDK surface in this repo today. The retained `receipt.x402` metadata block is part of the Commons protocol schema here; it should not be read as commercial feature coverage.
+Protocol-Commercial / x402 payment flows are intentionally separate from the Commons SDK surface in this repo. Commons examples and helpers below avoid payment metadata entirely; any retained `receipt.x402` handling is legacy / commercial-only compatibility, not the Commons happy path.
 
 ## Install
 
@@ -60,7 +60,6 @@ const response = await client.summarize({
 });
 
 console.log(response.receipt.result?.summary);
-console.log(response.receipt.metadata?.receipt_id);
 console.log(response.runtime_metadata?.duration_ms);
 
 const verification = await verifyReceipt(response.receipt, {
@@ -82,7 +81,6 @@ response = client.summarize(
 )
 
 print(response["receipt"]["result"]["summary"])
-print(response["receipt"]["metadata"]["receipt_id"])
 print(response.get("runtime_metadata", {}).get("duration_ms"))
 
 verification = verify_receipt(
@@ -100,15 +98,10 @@ Client methods now return a command response envelope:
 {
   "receipt": {
     "status": "success",
-    "x402": {
-      "verb": "summarize",
-      "version": "1.1.0",
-    },
     "result": {
       "summary": "..."
     },
     "metadata": {
-      "receipt_id": "...",
       "proof": {
         "alg": "ed25519-sha256",
         "canonical": "cl-stable-json-v1",

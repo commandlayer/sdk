@@ -15,7 +15,7 @@ CommandLayer SDKs now align on the Commons-first Protocol-Commons v1.1.0 surface
 
 ### Breaking changes
 - Consumers should treat the v1.1.0 wrapper and receipt shape as the only canonical public contract documented by this repository.
-- Verification guidance now assumes the canonical receipt payload and current signer-discovery flow; integrations built around older mixed envelopes should update.
+- Verification guidance now assumes the canonical receipt payload and current signer-discovery flow; integrations built around older mixed envelopes and payment-blended Commons payloads should update.
 
 ### Non-breaking improvements
 - Improved cross-SDK parity coverage for hashing, signature verification, and signer resolution behavior.
