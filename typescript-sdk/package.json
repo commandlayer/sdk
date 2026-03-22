@@ -30,7 +30,8 @@
     "prepack": "npm run build",
     "test:cli-smoke": "node scripts/cli-smoke.mjs",
     "test:unit": "npm run build && node scripts/unit-tests.mjs && npm run test:template",
-    "test": "npm run test:unit && npm run test:cli-smoke && node --test ../runtime/tests/*.mjs",
+    "test": "npm run test:unit && npm run test:cli-smoke",
+    "test:integration": "node --test ../runtime/tests/*.mjs",
     "test:template": "node scripts/template-tests.mjs"
   },
   "dependencies": {

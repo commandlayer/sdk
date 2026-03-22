@@ -23,7 +23,7 @@ This document is for maintainers and advanced integrators. Start with `README.md
 
 The signed payload includes:
 - `status`,
-- `x402` verb metadata,
+- the protocol metadata block at `x402` (Commons verb/version metadata; not a commercial SDK claim),
 - `result` or `error`,
 - `metadata.receipt_id`, and
 - `metadata.proof` with `alg`, `canonical`, `signer_id`, `hash_sha256`, and `signature_b64`.
@@ -84,5 +84,5 @@ When protocol versions change:
 1. update package versions and protocol constants,
 2. update root docs and per-package READMEs,
 3. regenerate or update shared fixtures,
-4. run both SDK test suites plus `runtime/tests`,
+4. run both SDK test suites plus the optional cross-SDK `runtime/tests` lane,
 5. confirm release instructions in `DEPLOYMENT_GUIDE.md` still match reality.

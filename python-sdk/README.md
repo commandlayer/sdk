@@ -8,6 +8,8 @@ The Python package mirrors the TypeScript SDK's protocol model:
 - `runtime_metadata` is optional execution context, and
 - verification can use an explicit Ed25519 key or ENS discovery.
 
+The retained `response["receipt"]["x402"]` block is Commons protocol metadata, not a commercial SDK surface in this repository.
+
 ## Install
 
 ```bash

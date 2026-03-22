@@ -4,8 +4,8 @@ Official TypeScript/JavaScript SDK for CommandLayer Commons v1.1.0.
 
 Use this package to:
 - call CommandLayer Commons verbs,
-- receive a canonical signed receipt,
-- capture optional runtime metadata separately,
+- receive the canonical signed `receipt`,
+- capture optional unsigned `runtime_metadata` separately,
 - verify receipts offline or through ENS, and
 - reproduce calls from the CLI.
 
@@ -72,7 +72,7 @@ Client methods return:
 }
 ```
 
-`verifyReceipt()` accepts the canonical `receipt` object. The SDK also accepts a whole response envelope for legacy compatibility, but new integrations should pass `response.receipt` explicitly.
+`verifyReceipt()` accepts the canonical `receipt` object. The retained `receipt.x402` block is Commons protocol metadata, not a commercial SDK surface. The SDK also accepts a whole response envelope for legacy compatibility, but new integrations should pass `response.receipt` explicitly.
 
 ## Verification modes
 
@@ -111,9 +111,12 @@ commandlayer verify --file receipt.json --public-key "ed25519:BASE64_PUBLIC_KEY"
 
 ## Development
 
+`npm test` is package-local and reproducible from this repo alone. The optional protocol integration lane remains available as `npm run test:integration`.
+
 ```bash
 cd typescript-sdk
 npm ci
 npm run typecheck
 npm test
+npm run test:integration
 ```

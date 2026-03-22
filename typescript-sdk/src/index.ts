@@ -537,7 +537,7 @@ export class CommandLayerClient {
     this.ensureVerifyConfigIfEnabled();
 
     const payload = {
-      x402: { verb, version: commonsVersion, entry: `x402://${verb}agent.eth/${verb}/v${commonsVersion}` },
+      x402: { verb, version: commonsVersion },
       ...(body.actor ? { actor: body.actor } : { actor: this.actor }),
       ...body
     };

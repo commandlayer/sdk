@@ -83,7 +83,7 @@ Both SDKs return the same shape:
 }
 ```
 
-Use `response.receipt` as the durable protocol artifact. `runtime_metadata` is optional execution context.
+Use `response.receipt` as the durable protocol artifact. `runtime_metadata` is optional execution context. The retained `x402` object carries Commons verb metadata and is not a commercial feature signal.
 
 ## 4. Verify the receipt
 
@@ -153,4 +153,5 @@ Not claimed as first-class SDK support here:
 - More recipes: `EXAMPLES.md`
 - Package docs: `typescript-sdk/README.md`, `python-sdk/README.md`
 - Maintainer notes: `DEVELOPER_EXPERIENCE.md`
-- Release flow: `DEPLOYMENT_GUIDE.md`
+- Release guide: `RELEASE_GUIDE.md`
+- Deployment checklist: `DEPLOYMENT_GUIDE.md`

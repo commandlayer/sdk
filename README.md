@@ -27,7 +27,7 @@ This repo is aligned to the current CommandLayer v1.1.0 surface:
 - canonical signed receipts as the verification contract payload, and
 - optional `runtime_metadata` as unsigned execution context.
 
-Protocol-Commercial / x402 payment flows are not a first-class SDK surface in this repo today. The SDK is Commons-first; if commercial support expands, it should be added explicitly rather than implied.
+Protocol-Commercial / x402 payment flows are not a first-class SDK surface in this repo today. The retained `receipt.x402` metadata block is part of the Commons protocol schema here; it should not be read as commercial feature coverage.
 
 ## Install
 
@@ -103,7 +103,6 @@ Client methods now return a command response envelope:
     "x402": {
       "verb": "summarize",
       "version": "1.1.0",
-      "entry": "x402://summarizeagent.eth/summarize/v1.1.0"
     },
     "result": {
       "summary": "..."
@@ -129,7 +128,7 @@ Client methods now return a command response envelope:
 
 The canonical signed object is `receipt`. `runtime_metadata` is optional and unsigned. Verification, persistence, and downstream audit should use the canonical `receipt` object.
 
-The SDK still normalizes older blended runtime responses for compatibility, but the repo now documents the v1.1.0 envelope as the single current truth.
+The SDK still normalizes older blended runtime responses for compatibility, but that normalization is legacy-only. The repo documents the v1.1.0 envelope as the single canonical public contract.
 
 ## Verification
 
@@ -175,7 +174,8 @@ The CLI is intended for demos, CI smoke tests, debugging, and reproducing SDK fl
 - Fast onboarding: `QUICKSTART.md`
 - Cookbook examples: `EXAMPLES.md`
 - Maintainer / architecture notes: `DEVELOPER_EXPERIENCE.md`
-- Build, release, and publish flow: `DEPLOYMENT_GUIDE.md`
+- Release guide: `RELEASE_GUIDE.md`
+- Deployment checklist: `DEPLOYMENT_GUIDE.md`
 - Changelog: `CHANGELOG.md`
 - TypeScript package docs: `typescript-sdk/README.md`
 - Python package docs: `python-sdk/README.md`
