@@ -3,7 +3,32 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Literal, TypedDict
 
-CanonicalReceipt = dict[str, Any]
+
+class ReceiptProtocolMetadata(TypedDict, total=False):
+    verb: str
+    version: str
+
+
+class ReceiptProof(TypedDict, total=False):
+    alg: Literal["ed25519-sha256"]
+    canonical: Literal["cl-stable-json-v1"]
+    signer_id: str
+    hash_sha256: str
+    signature_b64: str
+
+
+class ReceiptMetadata(TypedDict, total=False):
+    receipt_id: str
+    proof: ReceiptProof
+    actor: dict[str, Any]
+
+
+class CanonicalReceipt(TypedDict, total=False):
+    status: str
+    x402: ReceiptProtocolMetadata
+    result: Any
+    error: Any
+    metadata: ReceiptMetadata
 
 
 class RuntimeMetadata(TypedDict, total=False):

@@ -1,13 +1,13 @@
 # CommandLayer TypeScript SDK
 
-Official TypeScript/JavaScript SDK for CommandLayer Commons v1.1.0.
+Current-line TypeScript SDK for the CommandLayer Commons receipt contract (`1.1.0`).
 
-Use this package to:
-- call CommandLayer Commons verbs,
-- receive the canonical signed `receipt`,
-- capture optional unsigned `runtime_metadata` separately,
-- verify receipts offline or through ENS, and
-- reproduce calls from the CLI.
+## What is canonical
+
+- `response.receipt` is the signed receipt.
+- `response.runtime_metadata` is optional unsigned execution context.
+- `receipt.metadata.receipt_id` is the receipt hash identifier and must match `receipt.metadata.proof.hash_sha256`.
+- The verb lives at `receipt.x402.verb`.
 
 ## Install
 
@@ -15,108 +15,54 @@ Use this package to:
 npm install @commandlayer/sdk
 ```
 
-Supported runtime: Node.js 20+.
-
-## Quick start
+## Happy path
 
 ```ts
 import { createClient, verifyReceipt } from "@commandlayer/sdk";
 
 const client = createClient({ actor: "docs-example" });
-
 const response = await client.summarize({
-  content: "CommandLayer makes agent execution verifiable.",
+  content: "CommandLayer makes receipt verification explicit.",
   style: "bullet_points"
 });
 
-console.log(response.receipt.result?.summary);
-console.log(response.receipt.metadata?.receipt_id);
-console.log(response.runtime_metadata?.duration_ms);
+console.log(response.receipt.metadata.receipt_id);
+console.log(response.receipt.x402.verb);
 
 const verification = await verifyReceipt(response.receipt, {
-  publicKey: process.env.COMMANDLAYER_PUBLIC_KEY!
+  publicKey: "ed25519:BASE64_PUBLIC_KEY"
 });
 
 console.log(verification.ok);
 ```
 
-## Return shape
-
-Client methods return:
-
-```json
-{
-  "receipt": {
-    "status": "success",
-    "x402": {
-      "verb": "summarize",
-      "version": "1.1.0"
-    },
-    "result": {},
-    "metadata": {
-      "receipt_id": "...",
-      "proof": {
-        "alg": "ed25519-sha256",
-        "canonical": "cl-stable-json-v1",
-        "signer_id": "runtime.commandlayer.eth",
-        "hash_sha256": "...",
-        "signature_b64": "..."
-      }
-    }
-  },
-  "runtime_metadata": {
-    "trace_id": "trace_123",
-    "duration_ms": 118,
-    "provider": "runtime.commandlayer.org"
-  }
-}
-```
-
-`verifyReceipt()` accepts the canonical `receipt` object. The retained `receipt.x402` block is Commons protocol metadata, not a commercial SDK surface. The SDK also accepts a whole response envelope for legacy compatibility, but new integrations should pass `response.receipt` explicitly.
-
-## Verification modes
-
-### Offline
+## Explicit request builders
 
 ```ts
-const result = await verifyReceipt(response.receipt, {
-  publicKey: "ed25519:BASE64_PUBLIC_KEY"
+import { buildCommonsRequest, buildCommercialRequest } from "@commandlayer/sdk";
+
+const commons = buildCommonsRequest("summarize", {
+  input: { content: "hello", summary_style: "bullet_points" },
+  limits: { max_output_tokens: 400 }
+}, { actor: "docs-example" });
+
+const commercial = buildCommercialRequest("summarize", {
+  input: { content: "hello" }
+}, {
+  actor: "docs-example",
+  payment: { scheme: "x402", quote_id: "quote_123" }
 });
 ```
 
-### ENS-backed
+The commercial builder is isolated on purpose; this package's first-class runtime client remains Commons-first.
 
-```ts
-const result = await verifyReceipt(response.receipt, {
-  ens: {
-    name: "summarizeagent.eth",
-    rpcUrl: process.env.MAINNET_RPC_URL!
-  }
-});
-```
+## Verification helpers
 
-The ENS flow resolves:
-1. `cl.receipt.signer` on the agent ENS name,
-2. `cl.sig.pub` on the signer ENS name,
-3. `cl.sig.kid` on the signer ENS name.
+- `verifyReceipt(receipt, { publicKey })`
+- `verifyReceipt(receipt, { ens: { name, rpcUrl } })`
+- `extractReceiptVerb(receiptOrResponse)`
+- `recomputeReceiptHashSha256(receiptOrResponse)`
 
-## CLI
+## Legacy support
 
-The package ships the `commandlayer` CLI.
-
-```bash
-commandlayer summarize --content "hello" --style bullet_points --json
-commandlayer verify --file receipt.json --public-key "ed25519:BASE64_PUBLIC_KEY"
-```
-
-## Development
-
-`npm test` is package-local and reproducible from this repo alone. The optional protocol integration lane remains available as `npm run test:integration`.
-
-```bash
-cd typescript-sdk
-npm ci
-npm run typecheck
-npm test
-npm run test:integration
-```
+`normalizeCommandResponse()` still accepts old blended payloads that put `trace` beside the receipt and rewrites them to `{ receipt, runtime_metadata }`. That is compatibility-only, not the recommended contract.

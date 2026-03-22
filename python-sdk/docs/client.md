@@ -4,40 +4,19 @@
 
 `CommandLayerClient(runtime, actor, timeout_ms, headers, retries, verify_receipts, verify)`
 
-- `runtime`: Runtime base URL. Defaults to `https://runtime.commandlayer.org`.
-- `actor`: Actor ID attached to requests.
-- `timeout_ms`: Request timeout in milliseconds.
-- `headers`: Additional headers.
-- `retries`: Retry count for transport and timeout failures.
-- `verify_receipts`: Verify every returned canonical receipt before returning.
-- `verify`: Verification options (`public_key`/`publicKey` or `ens`).
+## Current contract rules
 
-## Return shape
+- Client methods return `{ "receipt": ..., "runtime_metadata": ... }`.
+- `receipt` is the signed artifact.
+- `runtime_metadata` is optional and unsigned.
+- `receipt.metadata.receipt_id` is the receipt hash identifier.
+- `receipt.x402.verb` is the canonical verb field.
 
-Every verb method returns:
+## Request construction
 
-```python
-{
-  "receipt": {...},
-  "runtime_metadata": {...},  # optional
-}
-```
+Use verb helpers for the normal Commons path. For low-level request shaping, use:
 
-`receipt` is the canonical signed payload. `runtime_metadata` is execution context and is not part of the signed receipt hash.
+- `build_commons_request(verb, body, actor=...)`
+- `build_commercial_request(verb, body, actor=..., payment=...)`
 
-## Verbs
-
-- `summarize`
-- `analyze`
-- `classify`
-- `clean`
-- `convert`
-- `describe`
-- `explain`
-- `format`
-- `parse`
-- `fetch`
-
-## Generic invoke
-
-Use `client.call(verb, payload)` for full control.
+The commercial builder is isolated from the Commons client happy path on purpose.

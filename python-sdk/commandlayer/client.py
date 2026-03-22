@@ -32,26 +32,57 @@ def _normalize_base(url: str) -> str:
     return str(url or "").rstrip("/")
 
 
+def build_commons_request(
+    verb: str,
+    body: dict[str, Any],
+    *,
+    actor: str,
+    version: str = COMMONS_VERSION,
+) -> dict[str, Any]:
+    request_actor = str(body.get("actor") or actor or "sdk-user")
+    return {
+        "x402": {"verb": verb, "version": version},
+        "actor": request_actor,
+        **body,
+        "actor": request_actor,
+    }
+
+
+def build_commercial_request(
+    verb: str,
+    body: dict[str, Any],
+    *,
+    actor: str,
+    payment: dict[str, Any],
+    version: str = COMMONS_VERSION,
+) -> dict[str, Any]:
+    return {
+        "mode": "commercial",
+        "receipt": {"verb": verb, "version": version},
+        "payment": payment,
+        "actor": str(body.get("actor") or actor or "sdk-user"),
+        **body,
+    }
+
+
 def normalize_command_response(payload: Any) -> CommandResponse:
     if not isinstance(payload, dict):
         raise CommandLayerError("Runtime response must be a JSON object", 502, payload)
-
     if isinstance(payload.get("receipt"), dict):
         response: CommandResponse = {"receipt": payload["receipt"]}
         if isinstance(payload.get("runtime_metadata"), dict):
             response["runtime_metadata"] = cast(RuntimeMetadata, dict(payload["runtime_metadata"]))
         return response
-
     receipt = dict(payload)
     runtime_metadata = receipt.pop("trace", None)
-    response = {"receipt": receipt}
+    response: CommandResponse = {"receipt": receipt}
     if isinstance(runtime_metadata, dict):
         response["runtime_metadata"] = cast(RuntimeMetadata, runtime_metadata)
     return response
 
 
 class CommandLayerClient:
-    """Synchronous CommandLayer client for Protocol-Commons v1.1.0 verbs."""
+    """Synchronous CommandLayer client for the current Commons receipt contract."""
 
     def __init__(
         self,
@@ -81,9 +112,7 @@ class CommandLayerClient:
     def _ensure_verify_config_if_enabled(self) -> None:
         if not self.verify_receipts:
             return
-        explicit_public_key = self.verify_defaults.get("public_key") or self.verify_defaults.get(
-            "publicKey"
-        )
+        explicit_public_key = self.verify_defaults.get("public_key") or self.verify_defaults.get("publicKey")
         has_explicit = bool(str(explicit_public_key or "").strip())
         ens = self.verify_defaults.get("ens") or {}
         has_ens = bool(ens.get("name") and (ens.get("rpcUrl") or ens.get("rpc_url")))
@@ -94,194 +123,48 @@ class CommandLayerClient:
                 400,
             )
 
-    def summarize(
-        self,
-        *,
-        content: str,
-        style: str | None = None,
-        format: str | None = None,
-        max_tokens: int = 1000,
-    ) -> CommandResponse:
-        return self.call(
-            "summarize",
-            {
-                "input": {
-                    "content": content,
-                    "summary_style": style,
-                    "format_hint": format,
-                },
-                "limits": {"max_output_tokens": max_tokens},
-            },
-        )
+    def summarize(self, *, content: str, style: str | None = None, format: str | None = None, max_tokens: int = 1000) -> CommandResponse:
+        return self.call("summarize", {"input": {"content": content, "summary_style": style, "format_hint": format}, "limits": {"max_output_tokens": max_tokens}})
 
-    def analyze(
-        self,
-        *,
-        content: str,
-        goal: str | None = None,
-        hints: list[str] | None = None,
-        max_tokens: int = 1000,
-    ) -> CommandResponse:
-        payload: dict[str, Any] = {
-            "input": content,
-            "limits": {"max_output_tokens": max_tokens},
-        }
+    def analyze(self, *, content: str, goal: str | None = None, hints: list[str] | None = None, max_tokens: int = 1000) -> CommandResponse:
+        payload: dict[str, Any] = {"input": content, "limits": {"max_output_tokens": max_tokens}}
         if goal:
             payload["goal"] = goal
         if hints:
             payload["hints"] = hints
         return self.call("analyze", payload)
 
-    def classify(
-        self, *, content: str, max_labels: int = 5, max_tokens: int = 1000
-    ) -> CommandResponse:
-        return self.call(
-            "classify",
-            {
-                "actor": self.actor,
-                "input": {"content": content},
-                "limits": {"max_labels": max_labels, "max_output_tokens": max_tokens},
-            },
-        )
+    def classify(self, *, content: str, max_labels: int = 5, max_tokens: int = 1000) -> CommandResponse:
+        return self.call("classify", {"input": {"content": content}, "limits": {"max_labels": max_labels, "max_output_tokens": max_tokens}})
 
-    def clean(
-        self,
-        *,
-        content: str,
-        operations: list[str] | None = None,
-        max_tokens: int = 1000,
-    ) -> CommandResponse:
-        return self.call(
-            "clean",
-            {
-                "input": {
-                    "content": content,
-                    "operations": operations
-                    or ["normalize_newlines", "collapse_whitespace", "trim"],
-                },
-                "limits": {"max_output_tokens": max_tokens},
-            },
-        )
+    def clean(self, *, content: str, operations: list[str] | None = None, max_tokens: int = 1000) -> CommandResponse:
+        return self.call("clean", {"input": {"content": content, "operations": operations or ["normalize_newlines", "collapse_whitespace", "trim"]}, "limits": {"max_output_tokens": max_tokens}})
 
-    def convert(
-        self,
-        *,
-        content: str,
-        from_format: str,
-        to_format: str,
-        max_tokens: int = 1000,
-    ) -> CommandResponse:
-        return self.call(
-            "convert",
-            {
-                "input": {
-                    "content": content,
-                    "source_format": from_format,
-                    "target_format": to_format,
-                },
-                "limits": {"max_output_tokens": max_tokens},
-            },
-        )
+    def convert(self, *, content: str, from_format: str, to_format: str, max_tokens: int = 1000) -> CommandResponse:
+        return self.call("convert", {"input": {"content": content, "source_format": from_format, "target_format": to_format}, "limits": {"max_output_tokens": max_tokens}})
 
-    def describe(
-        self,
-        *,
-        subject: str,
-        audience: str = "general",
-        detail: str = "medium",
-        max_tokens: int = 1000,
-    ) -> CommandResponse:
-        return self.call(
-            "describe",
-            {
-                "input": {
-                    "subject": (subject or "")[:140],
-                    "audience": audience,
-                    "detail_level": detail,
-                },
-                "limits": {"max_output_tokens": max_tokens},
-            },
-        )
+    def describe(self, *, subject: str, audience: str = "general", detail: str = "medium", max_tokens: int = 1000) -> CommandResponse:
+        return self.call("describe", {"input": {"subject": (subject or "")[:140], "audience": audience, "detail_level": detail}, "limits": {"max_output_tokens": max_tokens}})
 
-    def explain(
-        self,
-        *,
-        subject: str,
-        audience: str = "general",
-        style: str = "step-by-step",
-        detail: str = "medium",
-        max_tokens: int = 1000,
-    ) -> CommandResponse:
-        return self.call(
-            "explain",
-            {
-                "input": {
-                    "subject": (subject or "")[:140],
-                    "audience": audience,
-                    "style": style,
-                    "detail_level": detail,
-                },
-                "limits": {"max_output_tokens": max_tokens},
-            },
-        )
+    def explain(self, *, subject: str, audience: str = "general", style: str = "step-by-step", detail: str = "medium", max_tokens: int = 1000) -> CommandResponse:
+        return self.call("explain", {"input": {"subject": (subject or "")[:140], "audience": audience, "style": style, "detail_level": detail}, "limits": {"max_output_tokens": max_tokens}})
 
     def format(self, *, content: str, to: str, max_tokens: int = 1000) -> CommandResponse:
-        return self.call(
-            "format",
-            {
-                "input": {"content": content, "target_style": to},
-                "limits": {"max_output_tokens": max_tokens},
-            },
-        )
+        return self.call("format", {"input": {"content": content, "target_style": to}, "limits": {"max_output_tokens": max_tokens}})
 
-    def parse(
-        self,
-        *,
-        content: str,
-        content_type: str = "text",
-        mode: str = "best_effort",
-        target_schema: str | None = None,
-        max_tokens: int = 1000,
-    ) -> CommandResponse:
-        payload: dict[str, Any] = {
-            "input": {
-                "content": content,
-                "content_type": content_type,
-                "mode": mode,
-            },
-            "limits": {"max_output_tokens": max_tokens},
-        }
+    def parse(self, *, content: str, content_type: str = "text", mode: str = "best_effort", target_schema: str | None = None, max_tokens: int = 1000) -> CommandResponse:
+        payload: dict[str, Any] = {"input": {"content": content, "content_type": content_type, "mode": mode}, "limits": {"max_output_tokens": max_tokens}}
         if target_schema:
             payload["input"]["target_schema"] = target_schema
         return self.call("parse", payload)
 
-    def fetch(
-        self,
-        *,
-        source: str,
-        query: str | None = None,
-        include_metadata: bool | None = None,
-        max_tokens: int = 1000,
-    ) -> CommandResponse:
+    def fetch(self, *, source: str, query: str | None = None, include_metadata: bool | None = None, max_tokens: int = 1000) -> CommandResponse:
         input_obj: dict[str, Any] = {"source": source}
         if query is not None:
             input_obj["query"] = query
         if include_metadata is not None:
             input_obj["include_metadata"] = include_metadata
-        return self.call(
-            "fetch",
-            {"input": input_obj, "limits": {"max_output_tokens": max_tokens}},
-        )
-
-    def _build_payload(self, verb: str, body: dict[str, Any]) -> dict[str, Any]:
-        return {
-            "x402": {
-                "verb": verb,
-                "version": COMMONS_VERSION,
-            },
-            "actor": body.get("actor", self.actor),
-            **body,
-        }
+        return self.call("fetch", {"input": input_obj, "limits": {"max_output_tokens": max_tokens}})
 
     def _request(self, verb: str, payload: dict[str, Any]) -> httpx.Response:
         url = f"{self.runtime}/{verb}/v{COMMONS_VERSION}"
@@ -302,32 +185,24 @@ class CommandLayerClient:
         if verb not in VERBS:
             raise CommandLayerError(f"Unsupported verb: {verb}", 400)
         self._ensure_verify_config_if_enabled()
-        payload = self._build_payload(verb, body)
+        payload = build_commons_request(verb, body, actor=self.actor)
         response = self._request(verb, payload)
-
         try:
             data: Any = response.json()
         except json.JSONDecodeError:
             data = {}
-
         if not response.is_success:
             message = (
                 (data.get("message") if isinstance(data, dict) else None)
-                or (
-                    (data.get("error") or {}).get("message")
-                    if isinstance(data, dict) and isinstance(data.get("error"), dict)
-                    else None
-                )
+                or ((data.get("error") or {}).get("message") if isinstance(data, dict) and isinstance(data.get("error"), dict) else None)
                 or f"HTTP {response.status_code}"
             )
             raise CommandLayerError(str(message), response.status_code, data)
-
         normalized = normalize_command_response(data)
         if self.verify_receipts:
             verify_result = verify_receipt(
                 normalized["receipt"],
-                public_key=self.verify_defaults.get("public_key")
-                or self.verify_defaults.get("publicKey"),
+                public_key=self.verify_defaults.get("public_key") or self.verify_defaults.get("publicKey"),
                 ens=self.verify_defaults.get("ens"),
             )
             if not verify_result["ok"]:
