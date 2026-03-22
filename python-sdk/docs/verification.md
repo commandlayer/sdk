@@ -1,29 +1,19 @@
 # Verification
 
-The SDK verifies canonical signed receipts using:
+The verification helper validates the current receipt contract directly.
 
-- canonical JSON: `cl-stable-json-v1`
-- hash: `sha256` over the unsigned receipt
-- signature: `ed25519` over the resulting hash string
+## Rules
 
-`runtime_metadata` is not part of the signed payload.
+1. Read the signed object from `receipt`.
+2. Remove `metadata.receipt_id` and the signed hash/signature fields.
+3. Canonicalize with `cl-stable-json-v1`.
+4. Recompute `sha256`.
+5. Require `metadata.receipt_id == metadata.proof.hash_sha256`.
+6. Verify the Ed25519 signature over the UTF-8 hash string.
 
-## ENS key resolution flow
+## Helpers
 
-1. Resolve agent ENS TXT: `cl.receipt.signer`
-2. Resolve signer ENS TXT: `cl.sig.pub`
-3. Resolve signer ENS TXT: `cl.sig.kid`
-
-Use `resolve_signer_key(name, rpc_url)` for direct key resolution.
-
-## Programmatic verification
-
-```python
-from commandlayer import verify_receipt
-
-result = verify_receipt(
-    response["receipt"],
-    ens={"name": "summarizeagent.eth", "rpcUrl": "https://..."},
-)
-print(result["ok"])
-```
+- `verify_receipt(receipt, public_key=...)`
+- `verify_receipt(receipt, ens={"name": ..., "rpcUrl": ...})`
+- `extract_receipt_verb(receipt_or_response)`
+- `recompute_receipt_hash_sha256(receipt_or_response)`

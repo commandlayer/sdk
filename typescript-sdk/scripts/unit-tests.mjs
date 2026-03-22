@@ -86,6 +86,8 @@ const {
   recomputeReceiptHashSha256,
   verifyReceipt,
   resolveSignerKey,
+  buildCommonsRequest,
+  extractReceiptVerb,
   CommandLayerError,
   CommandLayerClient,
 } = require("../dist/index.cjs");
@@ -227,6 +229,15 @@ const vrEns = await verifyReceipt(receipt, {
 });
 assert(vrEns.ok === true, "verifyReceipt ok with ENS cl.receipt.signer + cl.sig.pub");
 assert(vrEns.values.pubkey_source === "ens", "verifyReceipt reports ENS key source");
+assert(extractReceiptVerb(receipt) === "summarize", "extractReceiptVerb reads canonical verb field");
+
+const builtRequest = buildCommonsRequest(
+  "summarize",
+  { input: { content: "hello" }, limits: { max_output_tokens: 10 } },
+  { actor: "sdk-test" }
+);
+assert(builtRequest.x402.verb === "summarize", "buildCommonsRequest sets canonical verb metadata");
+assert(builtRequest.actor === "sdk-test", "buildCommonsRequest sets actor");
 
 // Tampered receipt
 const tamperedReceipt = JSON.parse(JSON.stringify(receipt));

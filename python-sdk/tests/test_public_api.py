@@ -8,8 +8,10 @@ import httpx
 
 from commandlayer import (
     CommandLayerClient,
+    build_commons_request,
     canonicalize_stable_json_v1,
     create_client,
+    extract_receipt_verb,
     normalize_command_response,
     recompute_receipt_hash_sha256,
     verify_receipt,
@@ -19,7 +21,9 @@ ROOT = Path(__file__).resolve().parents[2]
 VECTORS = ROOT / "test_vectors"
 EXPECTED_EXPORTS = {
     "CommandLayerClient": CommandLayerClient,
+    "build_commons_request": build_commons_request,
     "create_client": create_client,
+    "extract_receipt_verb": extract_receipt_verb,
     "verify_receipt": verify_receipt,
     "normalize_command_response": normalize_command_response,
     "canonicalize_stable_json_v1": canonicalize_stable_json_v1,
@@ -129,6 +133,18 @@ def test_verify_receipt_is_importable_callable_and_matches_vector_contract() -> 
     )["hash_sha256"]
     assert result["values"]["signer_id"] == "runtime.commandlayer.eth"
     assert result["errors"]["verify_error"] is None
+
+
+def test_build_commons_request_and_extract_receipt_verb_follow_current_contract() -> None:
+    payload = build_commons_request(
+        "summarize",
+        {"input": {"content": "Hello"}, "limits": {"max_output_tokens": 50}},
+        actor="shape-check",
+    )
+
+    assert payload["x402"] == {"verb": "summarize", "version": "1.1.0"}
+    assert payload["actor"] == "shape-check"
+    assert extract_receipt_verb(load_fixture("receipt_valid.json")) == "summarize"
 
 
 

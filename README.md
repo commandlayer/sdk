@@ -1,8 +1,18 @@
 # CommandLayer SDK
 
-Official SDK repo for CommandLayer Protocol-Commons v1.1.0.
+Official SDK repo for the current-line CommandLayer Commons receipt contract (`1.1.0`).
 
-## Start Here
+## What this repo now treats as canonical
+
+- **Requests**: Commons requests are built around one explicit envelope: top-level `x402.verb`, `x402.version`, `actor`, and the verb body.
+- **Responses**: the signed artifact is always `response.receipt`.
+- **Unsigned runtime context**: optional execution details live in `response.runtime_metadata`.
+- **Verification**: verification recomputes the receipt hash from the unsigned receipt, checks `metadata.receipt_id === metadata.proof.hash_sha256`, then verifies the Ed25519 signature over the UTF-8 hash string.
+- **Verb semantics**: the verb is read from `receipt.x402.verb`.
+
+This repo no longer presents legacy blended envelopes as the primary contract. Legacy normalization remains only to accept older runtime responses that inlined `trace` beside the receipt.
+
+## Start here
 
 - Quickstart → `QUICKSTART.md`
 - Full usage → `EXAMPLES.md`
@@ -37,23 +47,50 @@ Protocol-Commercial / x402 payment flows are intentionally separate from the Com
 npm install @commandlayer/sdk
 ```
 
-Node.js 20+ is supported.
-
 ### Python
 
 ```bash
 pip install commandlayer
 ```
 
-Python 3.10+ is supported.
+## Canonical receipt shape
 
-## First call: TypeScript
+```json
+{
+  "receipt": {
+    "status": "success",
+    "x402": {
+      "verb": "summarize",
+      "version": "1.1.0"
+    },
+    "result": {
+      "summary": "..."
+    },
+    "metadata": {
+      "receipt_id": "sha256-of-unsigned-receipt",
+      "proof": {
+        "alg": "ed25519-sha256",
+        "canonical": "cl-stable-json-v1",
+        "signer_id": "runtime.commandlayer.eth",
+        "hash_sha256": "same-value-as-receipt_id",
+        "signature_b64": "..."
+      }
+    }
+  },
+  "runtime_metadata": {
+    "trace_id": "trace_123",
+    "duration_ms": 118,
+    "provider": "runtime.commandlayer.org"
+  }
+}
+```
+
+## TypeScript quick path
 
 ```ts
 import { createClient, verifyReceipt } from "@commandlayer/sdk";
 
 const client = createClient({ actor: "my-app" });
-
 const response = await client.summarize({
   content: "CommandLayer turns agent calls into signed receipts.",
   style: "bullet_points"
@@ -69,7 +106,7 @@ const verification = await verifyReceipt(response.receipt, {
 console.log(verification.ok);
 ```
 
-## First call: Python
+## Python quick path
 
 ```python
 from commandlayer import create_client, verify_receipt
@@ -121,54 +158,37 @@ Client methods now return a command response envelope:
 
 The canonical signed object is `receipt`. `runtime_metadata` is optional and unsigned. Verification, persistence, and downstream audit should use the canonical `receipt` object.
 
-The SDK still normalizes older blended runtime responses for compatibility, but that normalization is legacy-only. The repo documents the v1.1.0 envelope as the single canonical public contract.
+### Commons
+
+Use the client verb methods or the explicit request builder helpers:
+
+- TypeScript: `buildCommonsRequest(verb, body, { actor })`
+- Python: `build_commons_request(verb, body, actor=...)`
+
+### Commercial
+
+The repo does **not** claim first-class commercial runtime coverage, but both SDKs now isolate commercial request shaping behind explicit opt-in helpers instead of mixing it into Commons request construction:
+
+- TypeScript: `buildCommercialRequest(...)`
+- Python: `build_commercial_request(...)`
+
+That commercial builder is intentionally separate from the Commons happy path.
 
 ## Verification
 
-### Offline verification
+Verification reads exactly the current receipt contract:
 
-```ts
-import { verifyReceipt } from "@commandlayer/sdk";
+1. take `response.receipt`,
+2. remove `metadata.receipt_id` and the signed hash/signature fields,
+3. canonicalize with `cl-stable-json-v1`,
+4. recompute `sha256`,
+5. require `metadata.receipt_id === metadata.proof.hash_sha256`,
+6. verify the Ed25519 signature.
 
-const result = await verifyReceipt(response.receipt, {
-  publicKey: "ed25519:BASE64_PUBLIC_KEY"
-});
-```
+## Legacy handling retained
 
-### ENS-backed verification
+Only one legacy surface is retained in the main packages:
 
-```ts
-const result = await verifyReceipt(response.receipt, {
-  ens: {
-    name: "summarizeagent.eth",
-    rpcUrl: process.env.MAINNET_RPC_URL!
-  }
-});
-```
+- `normalizeCommandResponse` / `normalize_command_response` still accept older blended runtime payloads that used a top-level `trace` field and convert them into `{ receipt, runtime_metadata }`.
 
-ENS signer discovery resolves:
-1. `cl.receipt.signer` on the agent ENS name,
-2. `cl.sig.pub` on the signer ENS name,
-3. `cl.sig.kid` on the signer ENS name.
-
-## CLI
-
-Install the npm package and use the bundled CLI:
-
-```bash
-commandlayer summarize --content "Test text" --style bullet_points --json
-commandlayer verify --file receipt.json --public-key "ed25519:BASE64_PUBLIC_KEY"
-```
-
-The CLI is intended for demos, CI smoke tests, debugging, and reproducing SDK flows without writing app code.
-
-## Repo guide
-
-- Fast onboarding: `QUICKSTART.md`
-- Cookbook examples: `EXAMPLES.md`
-- Maintainer / architecture notes: `DEVELOPER_EXPERIENCE.md`
-- Release guide: `RELEASE_GUIDE.md`
-- Deployment checklist: `DEPLOYMENT_GUIDE.md`
-- Changelog: `CHANGELOG.md`
-- TypeScript package docs: `typescript-sdk/README.md`
-- Python package docs: `python-sdk/README.md`
+Everything else is documented and typed against the current receipt contract.

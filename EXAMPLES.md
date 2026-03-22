@@ -21,7 +21,7 @@ All examples in this file target:
         "alg": "ed25519-sha256",
         "canonical": "cl-stable-json-v1",
         "signer_id": "runtime.commandlayer.eth",
-        "hash_sha256": "...",
+        "hash_sha256": "same-value-as-receipt_id",
         "signature_b64": "..."
       }
     }
@@ -34,48 +34,19 @@ All examples in this file target:
 }
 ```
 
-## 2. TypeScript examples
-
-### Create client
+## TypeScript
 
 ```ts
-import { createClient } from "@commandlayer/sdk";
+import { createClient, extractReceiptVerb, verifyReceipt } from "@commandlayer/sdk";
 
-const client = createClient({
-  actor: "examples-ts",
-  runtime: "https://runtime.commandlayer.org"
-});
-```
-
-### Summarize
-
-```ts
+const client = createClient({ actor: "examples-ts" });
 const response = await client.summarize({
-  content: "CommandLayer defines semantic agent verbs.",
+  content: "CommandLayer defines verifiable agent verbs.",
   style: "bullet_points"
 });
 
-console.log(response.receipt.result?.summary);
-```
-
-### Analyze
-
-```ts
-const response = await client.analyze({
-  content: "Invoice total: $1200",
-  goal: "detect finance intent"
-});
-```
-
-### Classify
-
-```ts
-const response = await client.classify({
-  content: "Contact support@example.com"
-});
-```
-
-### Clean
+console.log(extractReceiptVerb(response));
+console.log(response.receipt.metadata.receipt_id);
 
 ```ts
 const response = await client.clean({
@@ -172,120 +143,52 @@ import { verifyReceipt } from "@commandlayer/sdk";
 const result = await verifyReceipt(response.receipt, {
   publicKey: "ed25519:BASE64_PUBLIC_KEY"
 });
+console.log(verified.ok);
 ```
 
-### Python, explicit key
+## Python
 
 ```python
-from commandlayer import verify_receipt
+from commandlayer import create_client, verify_receipt
+from commandlayer.verify import extract_receipt_verb
 
-result = verify_receipt(response["receipt"], public_key="ed25519:BASE64_PUBLIC_KEY")
+client = create_client(actor="examples-py")
+response = client.summarize(
+    content="CommandLayer defines verifiable agent verbs.",
+    style="bullet_points",
+)
+
+print(extract_receipt_verb(response))
+print(response["receipt"]["metadata"]["receipt_id"])
+print(verify_receipt(response["receipt"], public_key="ed25519:BASE64_PUBLIC_KEY")["ok"])
 ```
 
-### ENS-backed verification
+## Explicit request building
+
+### Commons
 
 ```ts
-const result = await verifyReceipt(response.receipt, {
-  ens: {
-    name: "summarizeagent.eth",
-    rpcUrl: process.env.MAINNET_RPC_URL!
-  }
-});
+import { buildCommonsRequest } from "@commandlayer/sdk";
+
+const payload = buildCommonsRequest("parse", {
+  input: { content: '{"a":1}', content_type: "json", mode: "strict" },
+  limits: { max_output_tokens: 300 }
+}, { actor: "examples-ts" });
 ```
 
 ```python
-result = verify_receipt(
-    response["receipt"],
-    ens={"name": "summarizeagent.eth", "rpcUrl": "https://mainnet.infura.io/v3/YOUR_KEY"},
+from commandlayer import build_commons_request
+
+payload = build_commons_request(
+    "parse",
+    {
+        "input": {"content": '{"a":1}', "content_type": "json", "mode": "strict"},
+        "limits": {"max_output_tokens": 300},
+    },
+    actor="examples-py",
 )
 ```
 
-## 5. CLI examples
+### Commercial request shaping
 
-### Summarize
-
-```bash
-commandlayer summarize \
-  --content "CommandLayer defines semantic verbs." \
-  --style bullet_points \
-  --json
-```
-
-### Analyze
-
-```bash
-commandlayer analyze \
-  --content "Invoice total: $500" \
-  --goal "detect finance intent" \
-  --json
-```
-
-### Verify a saved receipt
-
-```bash
-commandlayer verify \
-  --file receipt.json \
-  --public-key "ed25519:BASE64_PUBLIC_KEY"
-```
-
-## 6. Runtime override
-
-### TypeScript
-
-```ts
-const client = createClient({
-  actor: "override-example",
-  runtime: "https://staging-runtime.commandlayer.org"
-});
-```
-
-### Python
-
-```python
-client = create_client(
-    actor="override-example",
-    runtime="https://staging-runtime.commandlayer.org",
-)
-```
-
-## 7. Persist the canonical receipt
-
-```ts
-import { writeFile } from "node:fs/promises";
-
-await writeFile("receipt.json", JSON.stringify(response.receipt, null, 2));
-```
-
-```python
-import json
-from pathlib import Path
-
-Path("receipt.json").write_text(json.dumps(response["receipt"], indent=2), encoding="utf-8")
-```
-
-## 8. Error handling
-
-### TypeScript
-
-```ts
-import { CommandLayerError } from "@commandlayer/sdk";
-
-try {
-  await client.summarize({ content: "" });
-} catch (error) {
-  if (error instanceof CommandLayerError) {
-    console.error(error.statusCode, error.message, error.details);
-  }
-}
-```
-
-### Python
-
-```python
-from commandlayer import CommandLayerError
-
-try:
-    client.summarize(content="")
-except CommandLayerError as error:
-    print(error.status_code, error, error.details)
-```
+Commercial request shaping is intentionally separate from Commons examples. Use the dedicated `buildCommercialRequest` / `build_commercial_request` helper only if you are integrating a payment-aware flow outside this repo's first-class runtime client surface.
