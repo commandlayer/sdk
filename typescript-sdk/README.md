@@ -26,8 +26,8 @@ const response = await client.summarize({
   style: "bullet_points"
 });
 
-console.log(response.receipt.metadata.receipt_id);
-console.log(response.receipt.x402.verb);
+console.log(response.receipt.result?.summary);
+console.log(response.runtime_metadata?.duration_ms);
 
 const verification = await verifyReceipt(response.receipt, {
   publicKey: "ed25519:BASE64_PUBLIC_KEY"
@@ -36,7 +36,46 @@ const verification = await verifyReceipt(response.receipt, {
 console.log(verification.ok);
 ```
 
-## Explicit request builders
+## Return shape
+
+Client methods return:
+
+```json
+{
+  "receipt": {
+    "status": "success",
+    "result": {},
+    "metadata": {
+      "proof": {
+        "alg": "ed25519-sha256",
+        "canonical": "cl-stable-json-v1",
+        "signer_id": "runtime.commandlayer.eth",
+        "hash_sha256": "...",
+        "signature_b64": "..."
+      }
+    }
+  },
+  "runtime_metadata": {
+    "trace_id": "trace_123",
+    "duration_ms": 118,
+    "provider": "runtime.commandlayer.org"
+  }
+}
+```
+
+`verifyReceipt()` accepts the canonical `receipt` object. The SDK also accepts a whole response envelope for legacy compatibility, but new integrations should pass `response.receipt` explicitly. Any `receipt.x402` block should be treated as legacy / commercial-only metadata rather than part of the Commons contract.
+
+## Verification modes
+
+### Offline
+
+```ts
+const result = await verifyReceipt(response.receipt, {
+  publicKey: "ed25519:BASE64_PUBLIC_KEY"
+});
+```
+
+### ENS-backed
 
 ```ts
 import { buildCommonsRequest, buildCommercialRequest } from "@commandlayer/sdk";
@@ -65,4 +104,18 @@ The commercial builder is isolated on purpose; this package's first-class runtim
 
 ## Legacy support
 
-`normalizeCommandResponse()` still accepts old blended payloads that put `trace` beside the receipt and rewrites them to `{ receipt, runtime_metadata }`. That is compatibility-only, not the recommended contract.
+```bash
+cd typescript-sdk
+npm ci
+npm run typecheck
+npm test
+npm run test:integration
+```
+
+## Receipt verification semantics
+
+- `receipt.verb` is the canonical verb field returned by the runtime.
+- `receipt.metadata.receipt_id` is an identifier for the receipt instance.
+- `receipt.metadata.proof.hash_sha256` is the SHA-256 hash over the unsigned canonical receipt payload.
+- `verifyReceipt()` succeeds when the declared algorithm/canonicalization match, the recomputed payload hash matches `hash_sha256`, and the Ed25519 signature validates over that hash.
+- Legacy receipts that still place the verb under `receipt.x402.verb` continue to parse, but that path is fallback-only.

@@ -43,18 +43,24 @@ export type ReceiptMetadata = {
   [k: string]: unknown;
 };
 
-export type ReceiptProtocolMetadata = {
-  verb: Verb | string;
-  version: string;
-  [k: string]: unknown;
-};
-
-export type CanonicalReceipt<TResult = unknown, TError = unknown> = {
-  status: ReceiptStatus;
-  x402: ReceiptProtocolMetadata;
-  result?: TResult;
-  error?: TError;
-  metadata: ReceiptMetadata;
+export type CanonicalReceipt<T = unknown> = {
+  status: "success" | "error" | string;
+  /**
+   * Legacy / commercial-only metadata.
+   * Commons v1.1.0 receipts should not rely on or emit this block.
+   */
+  x402?: {
+    /** @deprecated Legacy fallback only. Prefer the top-level receipt.verb field. */
+    verb?: string;
+    version?: string;
+    entry?: string;
+    tenant?: string;
+    extras?: Record<string, unknown>;
+    [k: string]: unknown;
+  };
+  result?: T;
+  error?: unknown;
+  metadata?: ReceiptMetadata;
   [k: string]: unknown;
 };
 
@@ -82,6 +88,8 @@ export type LegacyBlendedReceipt<TResult = unknown, TError = unknown> = Canonica
 export type VerifyChecks = {
   hash_matches: boolean;
   signature_valid: boolean;
+  receipt_id_present: boolean;
+  /** @deprecated Legacy compatibility signal only. New receipts do not require receipt_id === hash_sha256. */
   receipt_id_matches: boolean;
   alg_matches: boolean;
   canonical_matches: boolean;
@@ -271,8 +279,17 @@ export async function resolveSignerKey(name: string, rpcUrl: string): Promise<Si
   }
 }
 
-export function extractReceipt(subject: CanonicalReceipt | CommandResponse | LegacyBlendedReceipt): CanonicalReceipt {
-  if (isRecord(subject) && isRecord(subject.receipt)) return subject.receipt as CanonicalReceipt;
+
+function getReceiptVerb(receipt: CanonicalReceipt): string | null {
+  if (typeof receipt.verb === "string") return receipt.verb;
+  if (typeof receipt.x402?.verb === "string") return receipt.x402.verb;
+  return null;
+}
+
+function extractReceipt(subject: CanonicalReceipt | CommandResponse | LegacyBlendedReceipt): CanonicalReceipt {
+  if (subject && typeof subject === "object" && "receipt" in subject && (subject as CommandResponse).receipt) {
+    return (subject as CommandResponse).receipt;
+  }
   return subject as CanonicalReceipt;
 }
 
@@ -332,7 +349,7 @@ export async function verifyReceipt(receiptLike: CanonicalReceipt | CommandRespo
     const { hash_sha256: recomputedHash } = recomputeReceiptHashSha256(receipt);
     const hashMatches = claimedHash === recomputedHash;
     const receiptId = typeof receipt.metadata?.receipt_id === "string" ? receipt.metadata.receipt_id : null;
-    const receiptIdMatches = !!claimedHash && receiptId === claimedHash;
+    const receiptIdMatches = !receiptId || !claimedHash ? true : receiptId === claimedHash;
 
     let pubkey: Uint8Array | null = null;
     let pubkey_source: "explicit" | "ens" | null = null;
@@ -368,11 +385,18 @@ export async function verifyReceipt(receiptLike: CanonicalReceipt | CommandRespo
     }
 
     return {
-      ok: algMatches && canonicalMatches && hashMatches && receiptIdMatches && signature_valid,
-      checks: { hash_matches: hashMatches, signature_valid, receipt_id_matches: receiptIdMatches, alg_matches: algMatches, canonical_matches: canonicalMatches },
+      ok: algMatches && canonicalMatches && hashMatches && signature_valid,
+      checks: {
+        hash_matches: hashMatches,
+        signature_valid,
+        receipt_id_present: receiptIdPresent,
+        receipt_id_matches: receiptIdMatches,
+        alg_matches: algMatches,
+        canonical_matches: canonicalMatches
+      },
       values: {
-        verb: extractReceiptVerb(receipt),
-        signer_id: signerId,
+        verb: getReceiptVerb(receipt),
+        signer_id,
         alg,
         canonical,
         claimed_hash: claimedHash,
@@ -387,13 +411,20 @@ export async function verifyReceipt(receiptLike: CanonicalReceipt | CommandRespo
     const receipt = extractReceipt(receiptLike as CanonicalReceipt | CommandResponse);
     return {
       ok: false,
-      checks: { hash_matches: false, signature_valid: false, receipt_id_matches: false, alg_matches: false, canonical_matches: false },
+      checks: {
+        hash_matches: false,
+        signature_valid: false,
+        receipt_id_present: typeof receipt?.metadata?.receipt_id === "string",
+        receipt_id_matches: false,
+        alg_matches: false,
+        canonical_matches: false
+      },
       values: {
-        verb: extractReceiptVerb(receipt),
-        signer_id: isRecord(receipt.metadata?.proof) && typeof receipt.metadata.proof.signer_id === "string" ? receipt.metadata.proof.signer_id : null,
-        alg: isRecord(receipt.metadata?.proof) && typeof receipt.metadata.proof.alg === "string" ? receipt.metadata.proof.alg : null,
-        canonical: isRecord(receipt.metadata?.proof) && typeof receipt.metadata.proof.canonical === "string" ? receipt.metadata.proof.canonical : null,
-        claimed_hash: isRecord(receipt.metadata?.proof) && typeof receipt.metadata.proof.hash_sha256 === "string" ? receipt.metadata.proof.hash_sha256 : null,
+        verb: receipt ? getReceiptVerb(receipt) : null,
+        signer_id: typeof receipt?.metadata?.proof?.signer_id === "string" ? receipt.metadata.proof.signer_id : null,
+        alg: typeof receipt?.metadata?.proof?.alg === "string" ? receipt.metadata.proof.alg : null,
+        canonical: typeof receipt?.metadata?.proof?.canonical === "string" ? receipt.metadata.proof.canonical : null,
+        claimed_hash: typeof receipt?.metadata?.proof?.hash_sha256 === "string" ? receipt.metadata.proof.hash_sha256 : null,
         recomputed_hash: null,
         receipt_id: typeof receipt.metadata?.receipt_id === "string" ? receipt.metadata.receipt_id : null,
         pubkey_source: null,
@@ -454,8 +485,25 @@ export class CommandLayerClient {
   async format(opts: { content: string; to: string; maxTokens?: number }) {
     return this.call("format", { input: { content: opts.content, target_style: opts.to }, limits: { max_output_tokens: opts.maxTokens ?? 1000 } });
   }
-  async parse(opts: { content: string; contentType?: "json" | "yaml" | "text"; mode?: "best_effort" | "strict"; targetSchema?: string; maxTokens?: number }) {
-    return this.call("parse", { input: { content: opts.content, content_type: opts.contentType ?? "text", mode: opts.mode ?? "best_effort", ...(opts.targetSchema ? { target_schema: opts.targetSchema } : {}) }, limits: { max_output_tokens: opts.maxTokens ?? 1000 } });
+
+  async parse(opts: {
+    content: string;
+    contentType?: "json" | "yaml" | "text";
+    mode?: "best_effort" | "strict";
+    schema?: string;
+    /** @deprecated Use schema. */
+    targetSchema?: string;
+    maxTokens?: number;
+  }) {
+    return this.call("parse", {
+      input: {
+        content: opts.content,
+        content_type: opts.contentType ?? "text",
+        mode: opts.mode ?? "best_effort",
+        ...(opts.schema || opts.targetSchema ? { schema: opts.schema ?? opts.targetSchema } : {})
+      },
+      limits: { max_output_tokens: opts.maxTokens ?? 1000 }
+    });
   }
   async fetch(opts: { source: string; query?: string; include_metadata?: boolean; maxTokens?: number }) {
     return this.call("fetch", { input: { source: opts.source, ...(opts.query !== undefined ? { query: opts.query } : {}), ...(opts.include_metadata !== undefined ? { include_metadata: opts.include_metadata } : {}) }, limits: { max_output_tokens: opts.maxTokens ?? 1000 } });
@@ -464,7 +512,12 @@ export class CommandLayerClient {
   async call(verb: Verb, body: Record<string, unknown>): Promise<CommandResponse> {
     if (!isVerb(verb)) throw new CommandLayerError(`Unsupported verb: ${verb}`, 400);
     this.ensureVerifyConfigIfEnabled();
-    const payload = buildCommonsRequest(verb, body, { actor: typeof body.actor === "string" ? body.actor : this.actor });
+
+    const payload = {
+      ...(body.actor ? { actor: body.actor } : { actor: this.actor }),
+      ...body
+    };
+
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
     try {

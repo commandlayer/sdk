@@ -4,10 +4,7 @@ Current-line Python SDK for the CommandLayer Commons receipt contract (`1.1.0`).
 
 ## Canonical contract
 
-- `response["receipt"]` is the signed receipt.
-- `response.get("runtime_metadata")` is optional unsigned runtime context.
-- `response["receipt"]["metadata"]["receipt_id"]` is the receipt hash identifier.
-- `response["receipt"]["x402"]["verb"]` is the canonical verb field.
+Any `response["receipt"]["x402"]` block should be treated as legacy / commercial-only metadata rather than part of the Commons happy path in this repository.
 
 ## Install
 
@@ -26,8 +23,8 @@ response = client.summarize(
     style="bullet_points",
 )
 
-print(response["receipt"]["metadata"]["receipt_id"])
-print(response["receipt"]["x402"]["verb"])
+print(response["receipt"]["result"]["summary"])
+print(response.get("runtime_metadata", {}).get("duration_ms"))
 
 verification = verify_receipt(
     response["receipt"],

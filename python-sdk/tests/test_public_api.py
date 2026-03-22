@@ -93,7 +93,6 @@ def test_mocked_client_response_matches_public_envelope_shape() -> None:
             json={
                 "receipt": {
                     "status": "success",
-                    "x402": {"verb": "summarize", "version": "1.1.0"},
                     "result": {"summary": "done"},
                     "metadata": {
                         "proof": {
@@ -117,7 +116,6 @@ def test_mocked_client_response_matches_public_envelope_shape() -> None:
         client.close()
 
     assert set(response.keys()) == {"receipt", "runtime_metadata"}
-    assert response["receipt"]["x402"]["verb"] == "summarize"
     assert response["receipt"]["result"]["summary"] == "done"
     assert response["runtime_metadata"]["duration_ms"] == 7
 

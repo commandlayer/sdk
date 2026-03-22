@@ -34,7 +34,6 @@ def test_client_posts_expected_payload() -> None:
             json={
                 "receipt": {
                     "status": "success",
-                    "x402": {"verb": "summarize"},
                     "metadata": {
                         "proof": {"alg": "ed25519-sha256", "canonical": "cl-stable-json-v1"}
                     },
@@ -54,7 +53,7 @@ def test_client_posts_expected_payload() -> None:
     sent = captured["json"]
     assert isinstance(sent, dict)
     assert sent["actor"] == "tester"
-    assert sent["x402"]["verb"] == "summarize"
+    assert "x402" not in sent
     assert response["receipt"]["status"] == "success"
     assert response["runtime_metadata"]["duration_ms"] == 12
 
@@ -69,6 +68,27 @@ def test_client_surfaces_error_message() -> None:
         client.summarize(content="x")
 
     assert exc.value.status_code == 422
+
+
+def test_parse_uses_current_schema_field() -> None:
+    captured: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["json"] = json.loads(request.content.decode("utf-8"))
+        return httpx.Response(200, json={"receipt": {"status": "success", "metadata": {"proof": {}}}})
+
+    client = CommandLayerClient(
+        runtime="https://runtime.commandlayer.org",
+        actor="tester",
+        http_client=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+
+    client.parse(content='{"a":1}', content_type="json", mode="strict", schema="invoice.summary.v1")
+
+    sent = captured["json"]
+    assert isinstance(sent, dict)
+    assert sent["input"]["schema"] == "invoice.summary.v1"
+    assert "x402" not in sent
 
 
 def test_client_verify_receipts_failure(monkeypatch: pytest.MonkeyPatch) -> None:

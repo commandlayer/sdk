@@ -24,10 +24,6 @@ class FakeResolver:
 def _signed_receipt() -> tuple[dict[str, object], str]:
     receipt: dict[str, object] = {
         "status": "success",
-        "x402": {
-            "verb": "summarize",
-            "version": "1.1.0",
-        },
         "metadata": {
             "proof": {
                 "alg": "ed25519-sha256",
@@ -48,7 +44,6 @@ def _signed_receipt() -> tuple[dict[str, object], str]:
     assert isinstance(proof, dict)
     proof["hash_sha256"] = h
     proof["signature_b64"] = base64.b64encode(sig).decode("utf-8")
-    metadata["receipt_id"] = h
 
     return receipt, pub_b64
 

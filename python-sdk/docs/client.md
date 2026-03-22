@@ -4,19 +4,42 @@
 
 `CommandLayerClient(runtime, actor, timeout_ms, headers, retries, verify_receipts, verify)`
 
-## Current contract rules
+- `runtime`: Runtime base URL. Defaults to `https://runtime.commandlayer.org`.
+- `actor`: Actor ID attached to requests.
+- `timeout_ms`: Request timeout in milliseconds.
+- `headers`: Additional headers.
+- `retries`: Retry count for transport and timeout failures.
+- `verify_receipts`: Verify every returned canonical receipt before returning.
+- `verify`: Verification options (`public_key`/`publicKey` or `ens`).
 
-- Client methods return `{ "receipt": ..., "runtime_metadata": ... }`.
-- `receipt` is the signed artifact.
-- `runtime_metadata` is optional and unsigned.
-- `receipt.metadata.receipt_id` is the receipt hash identifier.
-- `receipt.x402.verb` is the canonical verb field.
+## Return shape
 
-## Request construction
+Every verb method returns:
 
-Use verb helpers for the normal Commons path. For low-level request shaping, use:
+```python
+{
+  "receipt": {...},
+  "runtime_metadata": {...},  # optional
+}
+```
 
-- `build_commons_request(verb, body, actor=...)`
-- `build_commercial_request(verb, body, actor=..., payment=...)`
+`receipt` is the canonical signed payload. `runtime_metadata` is execution context and is not part of the signed receipt hash.
 
-The commercial builder is isolated from the Commons client happy path on purpose.
+## Verbs
+
+- `summarize`
+- `analyze`
+- `classify`
+- `clean`
+- `convert`
+- `describe`
+- `explain`
+- `format`
+- `parse`
+- `fetch`
+
+`parse()` accepts the current-line `schema` field for schema-guided parsing. The legacy `target_schema` argument is still accepted as a compatibility alias, but new integrations should prefer `schema`.
+
+## Generic invoke
+
+Use `client.call(verb, payload)` for full control.

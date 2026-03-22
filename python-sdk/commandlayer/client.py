@@ -150,12 +150,34 @@ class CommandLayerClient:
         return self.call("explain", {"input": {"subject": (subject or "")[:140], "audience": audience, "style": style, "detail_level": detail}, "limits": {"max_output_tokens": max_tokens}})
 
     def format(self, *, content: str, to: str, max_tokens: int = 1000) -> CommandResponse:
-        return self.call("format", {"input": {"content": content, "target_style": to}, "limits": {"max_output_tokens": max_tokens}})
+        return self.call(
+            "format",
+            {
+                "input": {"content": content, "target_style": to},
+                "limits": {"max_output_tokens": max_tokens},
+            },
+        )
 
-    def parse(self, *, content: str, content_type: str = "text", mode: str = "best_effort", target_schema: str | None = None, max_tokens: int = 1000) -> CommandResponse:
-        payload: dict[str, Any] = {"input": {"content": content, "content_type": content_type, "mode": mode}, "limits": {"max_output_tokens": max_tokens}}
-        if target_schema:
-            payload["input"]["target_schema"] = target_schema
+    def parse(
+        self,
+        *,
+        content: str,
+        content_type: str = "text",
+        mode: str = "best_effort",
+        schema: str | None = None,
+        target_schema: str | None = None,
+        max_tokens: int = 1000,
+    ) -> CommandResponse:
+        payload: dict[str, Any] = {
+            "input": {
+                "content": content,
+                "content_type": content_type,
+                "mode": mode,
+            },
+            "limits": {"max_output_tokens": max_tokens},
+        }
+        if schema or target_schema:
+            payload["input"]["schema"] = schema or target_schema
         return self.call("parse", payload)
 
     def fetch(self, *, source: str, query: str | None = None, include_metadata: bool | None = None, max_tokens: int = 1000) -> CommandResponse:
@@ -164,7 +186,16 @@ class CommandLayerClient:
             input_obj["query"] = query
         if include_metadata is not None:
             input_obj["include_metadata"] = include_metadata
-        return self.call("fetch", {"input": input_obj, "limits": {"max_output_tokens": max_tokens}})
+        return self.call(
+            "fetch",
+            {"input": input_obj, "limits": {"max_output_tokens": max_tokens}},
+        )
+
+    def _build_payload(self, verb: str, body: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "actor": body.get("actor", self.actor),
+            **body,
+        }
 
     def _request(self, verb: str, payload: dict[str, Any]) -> httpx.Response:
         url = f"{self.runtime}/{verb}/v{COMMONS_VERSION}"

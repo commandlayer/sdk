@@ -195,9 +195,11 @@ def verify_receipt(receipt: CanonicalReceipt | CommandResponse, public_key: str 
         alg_matches = alg == CANONICAL_ALG
         canonical_matches = canonical == CANONICAL_FORMAT
         recomputed_hash = recompute_receipt_hash_sha256(target)["hash_sha256"]
-        hash_matches = claimed_hash == recomputed_hash
-        receipt_id = metadata.get("receipt_id") if isinstance(metadata, dict) and isinstance(metadata.get("receipt_id"), str) else None
-        receipt_id_matches = bool(claimed_hash and receipt_id == claimed_hash)
+        hash_matches = bool(claimed_hash and claimed_hash == recomputed_hash)
+        metadata = target.get("metadata") if isinstance(target, dict) else None
+        receipt_id_value = metadata.get("receipt_id") if isinstance(metadata, dict) else None
+        receipt_id = receipt_id_value if isinstance(receipt_id_value, str) else None
+        receipt_id_matches = not receipt_id or not claimed_hash or receipt_id == claimed_hash
 
         pubkey: bytes | None = None
         pubkey_source: str | None = None

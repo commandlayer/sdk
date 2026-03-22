@@ -1,15 +1,22 @@
 # CommandLayer SDK Examples
 
-## Canonical response envelope
+Canonical examples for the CommandLayer SDK repo. These examples keep the Commons v1.1.0 story receipt-first: `receipt` is signed, `runtime_metadata` is optional and unsigned, and Commons examples do not include payment metadata.
+
+All examples in this file target:
+- Protocol-Commons v1.1.0,
+- canonical signed receipts returned as `response.receipt`, and
+- optional execution context returned as `response.runtime_metadata`.
+
+## 1. Canonical response envelope
 
 ```json
 {
   "receipt": {
     "status": "success",
-    "x402": { "verb": "summarize", "version": "1.1.0" },
-    "result": { "summary": "..." },
+    "result": {
+      "summary": "..."
+    },
     "metadata": {
-      "receipt_id": "sha256-of-unsigned-receipt",
       "proof": {
         "alg": "ed25519-sha256",
         "canonical": "cl-stable-json-v1",
@@ -41,7 +48,99 @@ const response = await client.summarize({
 console.log(extractReceiptVerb(response));
 console.log(response.receipt.metadata.receipt_id);
 
-const verified = await verifyReceipt(response.receipt, {
+```ts
+const response = await client.clean({
+  content: "   test@example.com  ",
+  operations: ["trim", "redact_emails"]
+});
+```
+
+### Convert
+
+```ts
+const response = await client.convert({
+  content: '{"a":1}',
+  from: "json",
+  to: "csv"
+});
+```
+
+### Describe
+
+```ts
+const response = await client.describe({
+  subject: "receipt verification",
+  audience: "general",
+  detail: "medium"
+});
+```
+
+### Explain
+
+```ts
+const response = await client.explain({
+  subject: "receipt verification",
+  audience: "novice",
+  style: "step-by-step"
+});
+```
+
+### Format
+
+```ts
+const response = await client.format({
+  content: "a: 1\nb: 2",
+  to: "table"
+});
+```
+
+### Parse
+
+```ts
+const response = await client.parse({
+  content: '{ "a": 1 }',
+  contentType: "json",
+  mode: "strict",
+  schema: "invoice.summary.v1"
+});
+```
+
+### Fetch
+
+```ts
+const response = await client.fetch({
+  source: "https://example.com",
+  include_metadata: true
+});
+```
+
+## 3. Python examples
+
+```python
+from commandlayer import create_client
+
+client = create_client(actor="examples-py")
+
+summary = client.summarize(content="CommandLayer defines semantic agent verbs.", style="bullet_points")
+analysis = client.analyze(content="Invoice total: $1200", goal="detect finance intent")
+classification = client.classify(content="Contact support@example.com")
+cleaned = client.clean(content="   test@example.com  ", operations=["trim", "redact_emails"])
+converted = client.convert(content='{"a":1}', from_format="json", to_format="csv")
+description = client.describe(subject="receipt verification")
+explanation = client.explain(subject="receipt verification", style="step-by-step")
+formatted = client.format(content="a: 1\nb: 2", to="table")
+parsed = client.parse(content='{ "a": 1 }', content_type="json", mode="strict", schema="invoice.summary.v1")
+fetched = client.fetch(source="https://example.com", include_metadata=True)
+```
+
+## 4. Verification examples
+
+### TypeScript, explicit key
+
+```ts
+import { verifyReceipt } from "@commandlayer/sdk";
+
+const result = await verifyReceipt(response.receipt, {
   publicKey: "ed25519:BASE64_PUBLIC_KEY"
 });
 console.log(verified.ok);

@@ -15,10 +15,29 @@ This repo no longer presents legacy blended envelopes as the primary contract. L
 ## Start here
 
 - Quickstart → `QUICKSTART.md`
-- Examples → `EXAMPLES.md`
-- TypeScript package docs → `typescript-sdk/README.md`
-- Python package docs → `python-sdk/README.md`
-- Shared test vectors → `test_vectors/README.md`
+- Full usage → `EXAMPLES.md`
+- Contributing → `CONTRIBUTING.md`
+- Maintainers → `MAINTAINER_GUIDE.md`
+- Releases → `RELEASE_GUIDE.md`
+- Test vectors → `test_vectors/README.md`
+- Changelog → `CHANGELOG.md`
+
+This repository ships the public developer surfaces for CommandLayer:
+- the TypeScript SDK: `@commandlayer/sdk`,
+- the Python SDK: `commandlayer`,
+- the `commandlayer` CLI shipped with the npm package,
+- verification helpers and test vectors, and
+- repo-level docs for install, release, and reproducibility.
+
+## Supported protocol line
+
+This repo is aligned to the current CommandLayer v1.1.0 surface:
+- Protocol-Commons v1.1.0,
+- Agent-Cards v1.1.0 for ENS-backed signer discovery,
+- canonical signed receipts as the verification contract payload, and
+- optional `runtime_metadata` as unsigned execution context.
+
+Protocol-Commercial / x402 payment flows are intentionally separate from the Commons SDK surface in this repo. Commons examples and helpers below avoid payment metadata entirely; any retained `receipt.x402` handling is legacy / commercial-only compatibility, not the Commons happy path.
 
 ## Install
 
@@ -78,8 +97,7 @@ const response = await client.summarize({
 });
 
 console.log(response.receipt.result?.summary);
-console.log(response.receipt.metadata.receipt_id);
-console.log(response.runtime_metadata?.trace_id);
+console.log(response.runtime_metadata?.duration_ms);
 
 const verification = await verifyReceipt(response.receipt, {
   publicKey: process.env.COMMANDLAYER_PUBLIC_KEY!
@@ -100,8 +118,7 @@ response = client.summarize(
 )
 
 print(response["receipt"]["result"]["summary"])
-print(response["receipt"]["metadata"]["receipt_id"])
-print(response.get("runtime_metadata", {}).get("trace_id"))
+print(response.get("runtime_metadata", {}).get("duration_ms"))
 
 verification = verify_receipt(
     response["receipt"],
@@ -110,7 +127,36 @@ verification = verify_receipt(
 print(verification["ok"])
 ```
 
-## Request construction
+## Return shape
+
+Client methods now return a command response envelope:
+
+```json
+{
+  "receipt": {
+    "status": "success",
+    "result": {
+      "summary": "..."
+    },
+    "metadata": {
+      "proof": {
+        "alg": "ed25519-sha256",
+        "canonical": "cl-stable-json-v1",
+        "signer_id": "runtime.commandlayer.eth",
+        "hash_sha256": "...",
+        "signature_b64": "..."
+      }
+    }
+  },
+  "runtime_metadata": {
+    "trace_id": "trace_123",
+    "duration_ms": 118,
+    "provider": "runtime.commandlayer.org"
+  }
+}
+```
+
+The canonical signed object is `receipt`. `runtime_metadata` is optional and unsigned. Verification, persistence, and downstream audit should use the canonical `receipt` object.
 
 ### Commons
 
