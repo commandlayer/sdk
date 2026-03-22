@@ -240,6 +240,7 @@ class CommandLayerClient:
         content: str,
         content_type: str = "text",
         mode: str = "best_effort",
+        schema: str | None = None,
         target_schema: str | None = None,
         max_tokens: int = 1000,
     ) -> CommandResponse:
@@ -251,8 +252,8 @@ class CommandLayerClient:
             },
             "limits": {"max_output_tokens": max_tokens},
         }
-        if target_schema:
-            payload["input"]["target_schema"] = target_schema
+        if schema or target_schema:
+            payload["input"]["schema"] = schema or target_schema
         return self.call("parse", payload)
 
     def fetch(
@@ -275,10 +276,6 @@ class CommandLayerClient:
 
     def _build_payload(self, verb: str, body: dict[str, Any]) -> dict[str, Any]:
         return {
-            "x402": {
-                "verb": verb,
-                "version": COMMONS_VERSION,
-            },
             "actor": body.get("actor", self.actor),
             **body,
         }

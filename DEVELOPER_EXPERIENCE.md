@@ -23,10 +23,10 @@ This document is for maintainers and advanced integrators. Start with `README.md
 
 The signed payload includes:
 - `status`,
-- the protocol metadata block at `x402` (Commons verb/version metadata; not a commercial SDK claim),
 - `result` or `error`,
-- `metadata.receipt_id`, and
 - `metadata.proof` with `alg`, `canonical`, `signer_id`, `hash_sha256`, and `signature_b64`.
+
+Commons receipts should not add payment metadata. A retained `x402` block is legacy / commercial-only compatibility and is not part of the Commons happy path.
 
 ### Runtime metadata
 
@@ -61,12 +61,13 @@ If one SDK intentionally diverges, document it in that package README and in rel
 ## Verification rules
 
 Both SDKs use the same verification contract:
-1. strip `receipt_id` and the signed hash/signature fields from the receipt,
+1. strip `receipt_id` if present and remove the signed hash/signature fields from the receipt,
 2. canonicalize with `cl-stable-json-v1`,
 3. recompute `sha256`,
 4. compare against `metadata.proof.hash_sha256`,
 5. verify the Ed25519 signature over the UTF-8 hash string,
-6. optionally discover the signing key via ENS.
+6. treat `metadata.receipt_id` as optional / opaque,
+7. optionally discover the signing key via ENS.
 
 ## CLI rules
 

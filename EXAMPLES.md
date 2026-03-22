@@ -1,6 +1,6 @@
 # CommandLayer SDK Examples
 
-Canonical examples for the CommandLayer SDK repo. These examples keep the Commons v1.1.0 story receipt-first: `receipt` is signed, `runtime_metadata` is optional and unsigned, and the `x402` object is protocol metadata rather than a commercial SDK surface.
+Canonical examples for the CommandLayer SDK repo. These examples keep the Commons v1.1.0 story receipt-first: `receipt` is signed, `runtime_metadata` is optional and unsigned, and Commons examples do not include payment metadata.
 
 All examples in this file target:
 - Protocol-Commons v1.1.0,
@@ -13,15 +13,10 @@ All examples in this file target:
 {
   "receipt": {
     "status": "success",
-    "x402": {
-      "verb": "summarize",
-      "version": "1.1.0",
-    },
     "result": {
       "summary": "..."
     },
     "metadata": {
-      "receipt_id": "...",
       "proof": {
         "alg": "ed25519-sha256",
         "canonical": "cl-stable-json-v1",
@@ -134,7 +129,8 @@ const response = await client.format({
 const response = await client.parse({
   content: '{ "a": 1 }',
   contentType: "json",
-  mode: "strict"
+  mode: "strict",
+  schema: "invoice.summary.v1"
 });
 ```
 
@@ -162,7 +158,7 @@ converted = client.convert(content='{"a":1}', from_format="json", to_format="csv
 description = client.describe(subject="receipt verification")
 explanation = client.explain(subject="receipt verification", style="step-by-step")
 formatted = client.format(content="a: 1\nb: 2", to="table")
-parsed = client.parse(content='{ "a": 1 }', content_type="json", mode="strict")
+parsed = client.parse(content='{ "a": 1 }', content_type="json", mode="strict", schema="invoice.summary.v1")
 fetched = client.fetch(source="https://example.com", include_metadata=True)
 ```
 

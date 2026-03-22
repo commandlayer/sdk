@@ -1,6 +1,6 @@
 # Test vectors
 
-This directory contains shared receipt fixtures used by both SDKs and the parity check. The fixtures model the current Commons v1.1.0 runtime-aligned receipt contract: `receipt.verb` is canonical, `metadata.receipt_id` is a distinct receipt identifier, `metadata.proof.hash_sha256` is the integrity hash, `runtime_metadata` is unsigned, and the `x402` object is retained only as protocol metadata or legacy compatibility metadata.
+This directory contains shared receipt fixtures used by both SDKs and the parity check. The fixtures model the current Commons v1.1.0 receipt contract: `receipt` is canonical, `runtime_metadata` is unsigned, and Commons fixtures do not carry payment metadata.
 
 ## Files
 

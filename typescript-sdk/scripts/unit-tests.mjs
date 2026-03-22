@@ -196,8 +196,6 @@ await assertRejects(
 
 const receipt = {
   status: "success",
-  verb: "summarize",
-  x402: { version: "1.1.0" },
   result: { summary: "test" },
   metadata: {
     proof: {
@@ -214,15 +212,12 @@ const receiptSig = nacl.sign.detached(new Uint8Array(receiptMsg), kp.secretKey);
 
 receipt.metadata.proof.hash_sha256 = hash_sha256;
 receipt.metadata.proof.signature_b64 = Buffer.from(receiptSig).toString("base64");
-receipt.metadata.receipt_id = "rcpt_unit_test_001";
 
 const vr = await verifyReceipt(receipt, { publicKey: `ed25519:${b64Key}` });
 assert(vr.ok === true, "verifyReceipt ok for valid receipt (explicit key)");
 assert(vr.checks.hash_matches === true, "verifyReceipt hash matches");
 assert(vr.checks.signature_valid === true, "verifyReceipt signature valid");
-assert(vr.checks.receipt_id_present === true, "verifyReceipt receipt_id present");
-assert(vr.checks.receipt_id_matches === false, "verifyReceipt does not require receipt_id to equal hash");
-assert(vr.values.verb === "summarize", "verifyReceipt reads top-level receipt verb");
+assert(vr.checks.receipt_id_matches === true, "verifyReceipt tolerates absent receipt_id");
 
 const vrEns = await verifyReceipt(receipt, {
   ens: {
@@ -251,19 +246,23 @@ try {
   assert(err instanceof CommandLayerError, "client.call rejects unknown verb with CommandLayerError");
 }
 
-
-
-const legacyVerbReceipt = JSON.parse(JSON.stringify(receipt));
-delete legacyVerbReceipt.verb;
-legacyVerbReceipt.x402.verb = "summarize";
-const legacyVerbHash = recomputeReceiptHashSha256(legacyVerbReceipt).hash_sha256;
-const legacyVerbSig = nacl.sign.detached(new Uint8Array(Buffer.from(legacyVerbHash, "utf8")), kp.secretKey);
-legacyVerbReceipt.metadata.proof.hash_sha256 = legacyVerbHash;
-legacyVerbReceipt.metadata.proof.signature_b64 = Buffer.from(legacyVerbSig).toString("base64");
-legacyVerbReceipt.metadata.receipt_id = "rcpt_unit_test_legacy_verb_001";
-const legacyVerbResult = await verifyReceipt(legacyVerbReceipt, { publicKey: `ed25519:${b64Key}` });
-assert(legacyVerbResult.ok === true, "verifyReceipt supports legacy x402.verb fallback");
-assert(legacyVerbResult.values.verb === "summarize", "verifyReceipt reports fallback verb value");
+const captured = [];
+const mockClient = new CommandLayerClient({
+  fetchImpl: async (_url, init) => {
+    captured.push(JSON.parse(init.body));
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return { receipt: { status: "success", metadata: { proof: {} } } };
+      }
+    };
+  }
+});
+await mockClient.parse({ content: '{"ok":true}', contentType: "json", schema: "invoice.summary.v1" });
+assert(captured[0].actor === "sdk-user", "client payload includes actor");
+assert(!("x402" in captured[0]), "commons request payload omits x402 metadata");
+assert(captured[0].input.schema === "invoice.summary.v1", "parse uses current-line schema field");
 
 // ---- Summary ----
 

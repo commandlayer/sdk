@@ -26,8 +26,10 @@ export type ReceiptMetadata = {
 
 export type CanonicalReceipt<T = unknown> = {
   status: "success" | "error" | string;
-  /** Canonical runtime receipt verb. */
-  verb?: string;
+  /**
+   * Legacy / commercial-only metadata.
+   * Commons v1.1.0 receipts should not rely on or emit this block.
+   */
   x402?: {
     /** @deprecated Legacy fallback only. Prefer the top-level receipt.verb field. */
     verb?: string;
@@ -336,8 +338,7 @@ export async function verifyReceipt(
     const { hash_sha256: recomputedHash } = recomputeReceiptHashSha256(receipt);
     const hashMatches = claimedHash ? recomputedHash === claimedHash : false;
     const receiptId = typeof receipt.metadata?.receipt_id === "string" ? receipt.metadata.receipt_id : null;
-    const receiptIdPresent = !!receiptId;
-    const receiptIdMatches = claimedHash ? receiptId === claimedHash : false;
+    const receiptIdMatches = !receiptId || !claimedHash ? true : receiptId === claimedHash;
 
     let pubkey: Uint8Array | null = null;
     let pubkey_source: "explicit" | "ens" | null = null;
@@ -524,13 +525,21 @@ export class CommandLayerClient {
     });
   }
 
-  async parse(opts: { content: string; contentType?: "json" | "yaml" | "text"; mode?: "best_effort" | "strict"; targetSchema?: string; maxTokens?: number }) {
+  async parse(opts: {
+    content: string;
+    contentType?: "json" | "yaml" | "text";
+    mode?: "best_effort" | "strict";
+    schema?: string;
+    /** @deprecated Use schema. */
+    targetSchema?: string;
+    maxTokens?: number;
+  }) {
     return this.call("parse", {
       input: {
         content: opts.content,
         content_type: opts.contentType ?? "text",
         mode: opts.mode ?? "best_effort",
-        ...(opts.targetSchema ? { target_schema: opts.targetSchema } : {})
+        ...(opts.schema || opts.targetSchema ? { schema: opts.schema ?? opts.targetSchema } : {})
       },
       limits: { max_output_tokens: opts.maxTokens ?? 1000 }
     });
@@ -552,7 +561,6 @@ export class CommandLayerClient {
     this.ensureVerifyConfigIfEnabled();
 
     const payload = {
-      x402: { verb, version: commonsVersion },
       ...(body.actor ? { actor: body.actor } : { actor: this.actor }),
       ...body
     };

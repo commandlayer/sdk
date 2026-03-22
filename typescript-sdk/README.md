@@ -30,8 +30,6 @@ const response = await client.summarize({
 });
 
 console.log(response.receipt.result?.summary);
-console.log(response.receipt.verb);
-console.log(response.receipt.metadata?.receipt_id);
 console.log(response.runtime_metadata?.duration_ms);
 
 const verification = await verifyReceipt(response.receipt, {
@@ -49,13 +47,8 @@ Client methods return:
 {
   "receipt": {
     "status": "success",
-    "verb": "summarize",
-    "x402": {
-      "version": "1.1.0"
-    },
     "result": {},
     "metadata": {
-      "receipt_id": "...",
       "proof": {
         "alg": "ed25519-sha256",
         "canonical": "cl-stable-json-v1",
@@ -73,7 +66,7 @@ Client methods return:
 }
 ```
 
-`verifyReceipt()` accepts the canonical `receipt` object. The runtime-aligned receipt verb lives at `receipt.verb`; `receipt.x402.verb` is accepted only as a legacy fallback. `metadata.receipt_id` is a distinct receipt identifier, while `metadata.proof.hash_sha256` is the integrity hash that is recomputed and signature-verified. The retained `receipt.x402` block is Commons protocol metadata, not a primary SDK surface. The SDK also accepts a whole response envelope for legacy compatibility, but new integrations should pass `response.receipt` explicitly.
+`verifyReceipt()` accepts the canonical `receipt` object. The SDK also accepts a whole response envelope for legacy compatibility, but new integrations should pass `response.receipt` explicitly. Any `receipt.x402` block should be treated as legacy / commercial-only metadata rather than part of the Commons contract.
 
 ## Verification modes
 
