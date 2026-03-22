@@ -31,6 +31,7 @@ export type CanonicalReceipt<T = unknown> = {
    * Commons v1.1.0 receipts should not rely on or emit this block.
    */
   x402?: {
+    /** @deprecated Legacy fallback only. Prefer the top-level receipt.verb field. */
     verb?: string;
     version?: string;
     entry?: string;
@@ -64,6 +65,8 @@ export type CommandResponse<T = unknown> = {
 export type VerifyChecks = {
   hash_matches: boolean;
   signature_valid: boolean;
+  receipt_id_present: boolean;
+  /** @deprecated Legacy compatibility signal only. New receipts do not require receipt_id === hash_sha256. */
   receipt_id_matches: boolean;
   alg_matches: boolean;
   canonical_matches: boolean;
@@ -257,6 +260,13 @@ export async function resolveSignerKey(name: string, rpcUrl: string): Promise<Si
   }
 }
 
+
+function getReceiptVerb(receipt: CanonicalReceipt): string | null {
+  if (typeof receipt.verb === "string") return receipt.verb;
+  if (typeof receipt.x402?.verb === "string") return receipt.x402.verb;
+  return null;
+}
+
 function extractReceipt(subject: CanonicalReceipt | CommandResponse | LegacyBlendedReceipt): CanonicalReceipt {
   if (subject && typeof subject === "object" && "receipt" in subject && (subject as CommandResponse).receipt) {
     return (subject as CommandResponse).receipt;
@@ -364,16 +374,17 @@ export async function verifyReceipt(
     }
 
     return {
-      ok: algMatches && canonicalMatches && hashMatches && receiptIdMatches && signature_valid,
+      ok: algMatches && canonicalMatches && hashMatches && signature_valid,
       checks: {
         hash_matches: hashMatches,
         signature_valid,
+        receipt_id_present: receiptIdPresent,
         receipt_id_matches: receiptIdMatches,
         alg_matches: algMatches,
         canonical_matches: canonicalMatches
       },
       values: {
-        verb: typeof receipt.x402?.verb === "string" ? receipt.x402.verb : null,
+        verb: getReceiptVerb(receipt),
         signer_id,
         alg,
         canonical,
@@ -396,12 +407,13 @@ export async function verifyReceipt(
       checks: {
         hash_matches: false,
         signature_valid: false,
+        receipt_id_present: typeof receipt?.metadata?.receipt_id === "string",
         receipt_id_matches: false,
         alg_matches: false,
         canonical_matches: false
       },
       values: {
-        verb: typeof receipt?.x402?.verb === "string" ? receipt.x402.verb : null,
+        verb: receipt ? getReceiptVerb(receipt) : null,
         signer_id: typeof receipt?.metadata?.proof?.signer_id === "string" ? receipt.metadata.proof.signer_id : null,
         alg: typeof receipt?.metadata?.proof?.alg === "string" ? receipt.metadata.proof.alg : null,
         canonical: typeof receipt?.metadata?.proof?.canonical === "string" ? receipt.metadata.proof.canonical : null,

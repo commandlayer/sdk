@@ -5,6 +5,7 @@
     "summary": "fixture"
   },
   "metadata": {
+    "receipt_id": "rcpt_20260322_fixture_wrong_kid_001",
     "proof": {
       "alg": "ed25519-sha256",
       "canonical": "cl-stable-json-v1",

@@ -114,3 +114,11 @@ npm run typecheck
 npm test
 npm run test:integration
 ```
+
+## Receipt verification semantics
+
+- `receipt.verb` is the canonical verb field returned by the runtime.
+- `receipt.metadata.receipt_id` is an identifier for the receipt instance.
+- `receipt.metadata.proof.hash_sha256` is the SHA-256 hash over the unsigned canonical receipt payload.
+- `verifyReceipt()` succeeds when the declared algorithm/canonicalization match, the recomputed payload hash matches `hash_sha256`, and the Ed25519 signature validates over that hash.
+- Legacy receipts that still place the verb under `receipt.x402.verb` continue to parse, but that path is fallback-only.
