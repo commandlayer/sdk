@@ -1,21 +1,21 @@
 {
   "kid": "v1",
   "status": "success",
+  "verb": "summarize",
   "x402": {
-    "verb": "summarize",
     "version": "1.1.0"
   },
   "result": {
     "summary": "fixture"
   },
   "metadata": {
+    "receipt_id": "rcpt_20260322_fixture_valid_v1_001",
     "proof": {
       "alg": "ed25519-sha256",
       "canonical": "cl-stable-json-v1",
       "signer_id": "runtime.commandlayer.eth",
-      "hash_sha256": "509b71764d0158fab6bb073ed0bf28182bc1fa0227c00dc4ef79a0067e968196",
-      "signature_b64": "RXtxKNIiU4uRSQoTK2wjByZnj3wJsA8g4+Ofuv+y3pUf/d57p1V9dL0vSoYUXLLMgPa7CpxKMsOl50AFhojcCw=="
-    },
-    "receipt_id": "509b71764d0158fab6bb073ed0bf28182bc1fa0227c00dc4ef79a0067e968196"
+      "hash_sha256": "9a2bad8df55ceff4944485c83577741b777f3f474dc58e43fa9a6fd8f610afcf",
+      "signature_b64": "ozupi+yFGOtusVUP5WsI7MdKqedE/Dl8BftuuOfsYQkTeAzArNLtR3+Uq1BKbaGDzIvSEgocerx72L44AYdpCg=="
+    }
   }
 }
