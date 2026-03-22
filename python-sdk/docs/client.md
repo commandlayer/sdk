@@ -38,6 +38,8 @@ Every verb method returns:
 - `parse`
 - `fetch`
 
+`parse()` accepts the current-line `schema` field for schema-guided parsing. The legacy `target_schema` argument is still accepted as a compatibility alias, but new integrations should prefer `schema`.
+
 ## Generic invoke
 
 Use `client.call(verb, payload)` for full control.

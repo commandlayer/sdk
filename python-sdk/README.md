@@ -8,7 +8,7 @@ The Python package mirrors the TypeScript SDK's protocol model:
 - `runtime_metadata` is optional execution context, and
 - verification can use an explicit Ed25519 key or ENS discovery.
 
-The retained `response["receipt"]["x402"]` block is Commons protocol metadata, not a commercial SDK surface in this repository.
+Any `response["receipt"]["x402"]` block should be treated as legacy / commercial-only metadata rather than part of the Commons happy path in this repository.
 
 ## Install
 
@@ -30,7 +30,6 @@ response = client.summarize(
 )
 
 print(response["receipt"]["result"]["summary"])
-print(response["receipt"]["metadata"]["receipt_id"])
 print(response.get("runtime_metadata", {}).get("duration_ms"))
 
 verification = verify_receipt(

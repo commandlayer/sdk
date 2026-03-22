@@ -1,10 +1,6 @@
 {
   "kid": "v1",
   "status": "success",
-  "x402": {
-    "verb": "summarize",
-    "version": "1.1.0"
-  },
   "result": {
     "summary": "fixture"
   },
@@ -13,9 +9,8 @@
       "alg": "ed25519-sha256",
       "canonical": "cl-stable-json-v1",
       "signer_id": "runtime.commandlayer.eth",
-      "hash_sha256": "509b71764d0158fab6bb073ed0bf28182bc1fa0227c00dc4ef79a0067e968196",
-      "signature_b64": "RXtxKNIiU4uRSQoTK2wjByZnj3wJsA8g4+Ofuv+y3pUf/d57p1V9dL0vSoYUXLLMgPa7CpxKMsOl50AFhojcCw=="
-    },
-    "receipt_id": "509b71764d0158fab6bb073ed0bf28182bc1fa0227c00dc4ef79a0067e968196"
+      "hash_sha256": "e4a5caf79b2caff783539414d44fbac79ad7f6fa95e54a9f7529ffc7ccd663cb",
+      "signature_b64": "QrS9hVm8IVuLSPdrun9WiMtW49mphrW4OeMPJOfxDbsAByHR0v64IyLQ5PaxsanPfvHKzZqYFJT8g5lR1yGvBA=="
+    }
   }
 }
