@@ -1,6 +1,22 @@
 # CommandLayer SDK
 
-Official SDK repo for the current-line CommandLayer Commons receipt contract (`1.1.0`).
+CommandLayer turns AI/runtime actions into verifiable receipts you can run and audit from one SDK.
+
+```bash
+npm install @commandlayer/sdk
+```
+
+```ts
+import { commandlayer } from "@commandlayer/sdk";
+const receipt = await commandlayer.run("summarize", {
+  text: "Agent receipts prove what happened."
+});
+const result = await commandlayer.verify(receipt);
+console.log(receipt);
+console.log(result.valid ?? result.ok);
+```
+
+For advanced usage (custom clients, ENS/public key verification, and protocol details), see the docs below.
 
 ## What this repo now treats as canonical
 

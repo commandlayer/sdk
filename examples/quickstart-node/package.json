@@ -1,0 +1,11 @@
+{
+  "name": "commandlayer-quickstart-node",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@commandlayer/sdk": "latest"
+  }
+}

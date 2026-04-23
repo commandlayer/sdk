@@ -1,6 +1,22 @@
 # CommandLayer TypeScript SDK
 
-Current-line TypeScript SDK for the CommandLayer Commons receipt contract (`1.1.0`).
+CommandLayer turns AI/runtime actions into verifiable receipts with a simple run + verify API.
+
+```bash
+npm install @commandlayer/sdk
+```
+
+```ts
+import { commandlayer } from "@commandlayer/sdk";
+const receipt = await commandlayer.run("summarize", {
+  text: "Agent receipts prove what happened."
+});
+const result = await commandlayer.verify(receipt);
+console.log(receipt);
+console.log(result.valid ?? result.ok);
+```
+
+For advanced usage and lower-level APIs, continue below.
 
 ## What is canonical
 

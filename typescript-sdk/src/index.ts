@@ -64,6 +64,12 @@ export type CanonicalReceipt<T = unknown> = {
   [k: string]: unknown;
 };
 
+export type ReceiptProtocolMetadata = {
+  verb: string;
+  version: string;
+  [k: string]: unknown;
+};
+
 export type RuntimeMetadata = {
   trace_id?: string;
   parent_trace_id?: string | null;
@@ -77,11 +83,11 @@ export type RuntimeMetadata = {
 };
 
 export type CommandResponse<TResult = unknown, TError = unknown> = {
-  receipt: CanonicalReceipt<TResult, TError>;
+  receipt: CanonicalReceipt<TResult>;
   runtime_metadata?: RuntimeMetadata;
 };
 
-export type LegacyBlendedReceipt<TResult = unknown, TError = unknown> = CanonicalReceipt<TResult, TError> & {
+export type LegacyBlendedReceipt<TResult = unknown, TError = unknown> = CanonicalReceipt<TResult> & {
   trace?: RuntimeMetadata;
 };
 
@@ -115,17 +121,22 @@ export type VerifyResult = {
     verify_error?: string | null;
   };
 };
+export type HighLevelVerifyResult = VerifyResult & { valid: boolean };
 
 export type EnsVerifyOptions = { name: string; rpcUrl: string };
 export type SignerKeyResolution = { algorithm: "ed25519"; kid: string; rawPublicKeyBytes: Uint8Array };
 export type VerifyOptions = { publicKey?: string; ens?: EnsVerifyOptions };
 export type ClientOptions = {
+  baseUrl?: string;
   runtime?: string;
   actor?: string;
   timeoutMs?: number;
   fetchImpl?: typeof fetch;
   verifyReceipts?: boolean;
   verify?: VerifyOptions;
+};
+export type RunOptions = {
+  actor?: string;
 };
 
 export type CommonsRequestEnvelope<TBody extends Record<string, unknown> = Record<string, unknown>> = {
@@ -295,6 +306,7 @@ function extractReceipt(subject: CanonicalReceipt | CommandResponse | LegacyBlen
 
 export function extractReceiptVerb(subject: CanonicalReceipt | CommandResponse | LegacyBlendedReceipt): string | null {
   const receipt = extractReceipt(subject);
+  if (typeof receipt.verb === "string") return receipt.verb;
   return isRecord(receipt.x402) && typeof receipt.x402.verb === "string" ? receipt.x402.verb : null;
 }
 
@@ -349,6 +361,7 @@ export async function verifyReceipt(receiptLike: CanonicalReceipt | CommandRespo
     const { hash_sha256: recomputedHash } = recomputeReceiptHashSha256(receipt);
     const hashMatches = claimedHash === recomputedHash;
     const receiptId = typeof receipt.metadata?.receipt_id === "string" ? receipt.metadata.receipt_id : null;
+    const receiptIdPresent = receiptId !== null;
     const receiptIdMatches = !receiptId || !claimedHash ? true : receiptId === claimedHash;
 
     let pubkey: Uint8Array | null = null;
@@ -396,7 +409,7 @@ export async function verifyReceipt(receiptLike: CanonicalReceipt | CommandRespo
       },
       values: {
         verb: getReceiptVerb(receipt),
-        signer_id,
+        signer_id: signerId,
         alg,
         canonical,
         claimed_hash: claimedHash,
@@ -444,7 +457,7 @@ export class CommandLayerClient {
   verifyDefaults?: VerifyOptions;
 
   constructor(opts: ClientOptions = {}) {
-    this.runtime = normalizeBase(opts.runtime || DEFAULT_RUNTIME);
+    this.runtime = normalizeBase(opts.baseUrl || opts.runtime || DEFAULT_RUNTIME);
     this.actor = opts.actor || "sdk-user";
     this.timeoutMs = opts.timeoutMs ?? 30_000;
     this.fetchImpl = opts.fetchImpl || fetch;
@@ -509,6 +522,20 @@ export class CommandLayerClient {
     return this.call("fetch", { input: { source: opts.source, ...(opts.query !== undefined ? { query: opts.query } : {}), ...(opts.include_metadata !== undefined ? { include_metadata: opts.include_metadata } : {}) }, limits: { max_output_tokens: opts.maxTokens ?? 1000 } });
   }
 
+  async run(action: Verb, input: Record<string, unknown>, options: RunOptions = {}): Promise<CommandResponse> {
+    return this.call(action, {
+      ...(options.actor ? { actor: options.actor } : {}),
+      input
+    });
+  }
+
+  async verify(receipt: CanonicalReceipt | CommandResponse, options: VerifyOptions = {}): Promise<VerifyResult> {
+    return verifyReceipt(receipt, {
+      ...(this.verifyDefaults || {}),
+      ...options
+    });
+  }
+
   async call(verb: Verb, body: Record<string, unknown>): Promise<CommandResponse> {
     if (!isVerb(verb)) throw new CommandLayerError(`Unsupported verb: ${verb}`, 400);
     this.ensureVerifyConfigIfEnabled();
@@ -559,3 +586,15 @@ export class CommandLayerClient {
 export function createClient(opts: ClientOptions = {}) {
   return new CommandLayerClient(opts);
 }
+
+const defaultClient = createClient();
+
+export const commandlayer = {
+  run(action: Verb, input: Record<string, unknown>, options?: RunOptions) {
+    return defaultClient.run(action, input, options);
+  },
+  async verify(receipt: CanonicalReceipt | CommandResponse, options?: VerifyOptions): Promise<HighLevelVerifyResult> {
+    const result = await defaultClient.verify(receipt, options);
+    return { ...result, valid: result.ok };
+  }
+};
