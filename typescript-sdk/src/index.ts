@@ -27,6 +27,12 @@ const VERBS = [
 export type Verb = (typeof VERBS)[number];
 export type ReceiptStatus = "success" | "error" | string;
 
+export type ReceiptProtocolMetadata = {
+  verb: string;
+  version?: string;
+  [k: string]: unknown;
+};
+
 export type ReceiptProof = {
   alg: typeof CANONICAL_ALG;
   canonical: typeof CANONICAL_FORMAT;
@@ -43,23 +49,20 @@ export type ReceiptMetadata = {
   [k: string]: unknown;
 };
 
-export type CanonicalReceipt<T = unknown> = {
-  status: "success" | "error" | string;
+export type CanonicalReceipt<TResult = unknown, TError = unknown> = {
+  status: ReceiptStatus;
   /**
    * Legacy / commercial-only metadata.
    * Commons v1.1.0 receipts should not rely on or emit this block.
    */
-  x402?: {
+  x402?: ReceiptProtocolMetadata & {
     /** @deprecated Legacy fallback only. Prefer the top-level receipt.verb field. */
-    verb?: string;
-    version?: string;
     entry?: string;
     tenant?: string;
     extras?: Record<string, unknown>;
-    [k: string]: unknown;
   };
-  result?: T;
-  error?: unknown;
+  result?: TResult;
+  error?: TError;
   metadata?: ReceiptMetadata;
   [k: string]: unknown;
 };
@@ -283,6 +286,11 @@ export async function resolveSignerKey(name: string, rpcUrl: string): Promise<Si
 function getReceiptVerb(receipt: CanonicalReceipt): string | null {
   if (typeof receipt.verb === "string") return receipt.verb;
   if (typeof receipt.x402?.verb === "string") return receipt.x402.verb;
+  const result = isRecord(receipt.result) ? receipt.result : null;
+  if (result) {
+    if ("summary" in result) return "summarize";
+    if ("analysis" in result) return "analyze";
+  }
   return null;
 }
 
@@ -295,7 +303,7 @@ function extractReceipt(subject: CanonicalReceipt | CommandResponse | LegacyBlen
 
 export function extractReceiptVerb(subject: CanonicalReceipt | CommandResponse | LegacyBlendedReceipt): string | null {
   const receipt = extractReceipt(subject);
-  return isRecord(receipt.x402) && typeof receipt.x402.verb === "string" ? receipt.x402.verb : null;
+  return getReceiptVerb(receipt);
 }
 
 export function normalizeCommandResponse<T = unknown>(payload: unknown): CommandResponse<T> {
@@ -349,6 +357,7 @@ export async function verifyReceipt(receiptLike: CanonicalReceipt | CommandRespo
     const { hash_sha256: recomputedHash } = recomputeReceiptHashSha256(receipt);
     const hashMatches = claimedHash === recomputedHash;
     const receiptId = typeof receipt.metadata?.receipt_id === "string" ? receipt.metadata.receipt_id : null;
+    const receiptIdPresent = receiptId !== null;
     const receiptIdMatches = !receiptId || !claimedHash ? true : receiptId === claimedHash;
 
     let pubkey: Uint8Array | null = null;
@@ -396,7 +405,7 @@ export async function verifyReceipt(receiptLike: CanonicalReceipt | CommandRespo
       },
       values: {
         verb: getReceiptVerb(receipt),
-        signer_id,
+        signer_id: signerId,
         alg,
         canonical,
         claimed_hash: claimedHash,
