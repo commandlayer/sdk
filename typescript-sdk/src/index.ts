@@ -77,11 +77,11 @@ export type RuntimeMetadata = {
 };
 
 export type CommandResponse<TResult = unknown, TError = unknown> = {
-  receipt: CanonicalReceipt<TResult, TError>;
+  receipt: CanonicalReceipt<TResult>;
   runtime_metadata?: RuntimeMetadata;
 };
 
-export type LegacyBlendedReceipt<TResult = unknown, TError = unknown> = CanonicalReceipt<TResult, TError> & {
+export type LegacyBlendedReceipt<TResult = unknown, TError = unknown> = CanonicalReceipt<TResult> & {
   trace?: RuntimeMetadata;
 };
 
@@ -126,6 +126,12 @@ export type ClientOptions = {
   fetchImpl?: typeof fetch;
   verifyReceipts?: boolean;
   verify?: VerifyOptions;
+};
+
+export type ReceiptProtocolMetadata = {
+  verb: string;
+  version: string;
+  [k: string]: unknown;
 };
 
 export type CommonsRequestEnvelope<TBody extends Record<string, unknown> = Record<string, unknown>> = {
@@ -295,7 +301,7 @@ function extractReceipt(subject: CanonicalReceipt | CommandResponse | LegacyBlen
 
 export function extractReceiptVerb(subject: CanonicalReceipt | CommandResponse | LegacyBlendedReceipt): string | null {
   const receipt = extractReceipt(subject);
-  return isRecord(receipt.x402) && typeof receipt.x402.verb === "string" ? receipt.x402.verb : null;
+  return getReceiptVerb(receipt);
 }
 
 export function normalizeCommandResponse<T = unknown>(payload: unknown): CommandResponse<T> {
@@ -350,6 +356,7 @@ export async function verifyReceipt(receiptLike: CanonicalReceipt | CommandRespo
     const hashMatches = claimedHash === recomputedHash;
     const receiptId = typeof receipt.metadata?.receipt_id === "string" ? receipt.metadata.receipt_id : null;
     const receiptIdMatches = !receiptId || !claimedHash ? true : receiptId === claimedHash;
+    const receiptIdPresent = typeof receiptId === "string";
 
     let pubkey: Uint8Array | null = null;
     let pubkey_source: "explicit" | "ens" | null = null;
@@ -396,7 +403,7 @@ export async function verifyReceipt(receiptLike: CanonicalReceipt | CommandRespo
       },
       values: {
         verb: getReceiptVerb(receipt),
-        signer_id,
+        signer_id: signerId,
         alg,
         canonical,
         claimed_hash: claimedHash,

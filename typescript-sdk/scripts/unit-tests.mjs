@@ -197,6 +197,7 @@ await assertRejects(
 // ---- Receipt verification (end-to-end) ----
 
 const receipt = {
+  verb: "summarize",
   status: "success",
   result: { summary: "test" },
   metadata: {
