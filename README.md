@@ -2,6 +2,31 @@
 
 Official SDK repo for the current-line CommandLayer Commons receipt contract (`1.1.0`).
 
+## Quick Start
+
+Install CommandLayer, wrap an agent action, get a signed receipt, and verify it.
+
+```bash
+npm install @commandlayer/sdk
+```
+
+```js
+import { commandlayer } from "@commandlayer/sdk";
+
+const receipt = await commandlayer.run("summarize", {
+  text: "Agent receipts prove what happened."
+});
+
+const result = await commandlayer.verify(receipt);
+
+console.log(result.valid);
+```
+
+### Commons vs Commercial
+
+- Commons requests do not include x402 metadata.
+- Commercial requests include x402 metadata where required.
+
 ## What this repo now treats as canonical
 
 - **Requests**: Commons requests are built around one explicit envelope: top-level `x402.verb`, `x402.version`, `actor`, and the verb body.
