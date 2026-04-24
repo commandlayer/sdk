@@ -198,6 +198,7 @@ await assertRejects(
 
 const receipt = {
   status: "success",
+  verb: "summarize",
   result: { summary: "test" },
   metadata: {
     proof: {

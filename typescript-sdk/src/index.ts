@@ -26,6 +26,11 @@ const VERBS = [
 
 export type Verb = (typeof VERBS)[number];
 export type ReceiptStatus = "success" | "error" | string;
+export type ReceiptProtocolMetadata = {
+  verb?: string;
+  version?: string;
+  [k: string]: unknown;
+};
 
 export type ReceiptProof = {
   alg: typeof CANONICAL_ALG;
@@ -76,12 +81,12 @@ export type RuntimeMetadata = {
   [k: string]: unknown;
 };
 
-export type CommandResponse<TResult = unknown, TError = unknown> = {
-  receipt: CanonicalReceipt<TResult, TError>;
+export type CommandResponse<TResult = unknown> = {
+  receipt: CanonicalReceipt<TResult>;
   runtime_metadata?: RuntimeMetadata;
 };
 
-export type LegacyBlendedReceipt<TResult = unknown, TError = unknown> = CanonicalReceipt<TResult, TError> & {
+export type LegacyBlendedReceipt<TResult = unknown> = CanonicalReceipt<TResult> & {
   trace?: RuntimeMetadata;
 };
 
@@ -295,7 +300,7 @@ function extractReceipt(subject: CanonicalReceipt | CommandResponse | LegacyBlen
 
 export function extractReceiptVerb(subject: CanonicalReceipt | CommandResponse | LegacyBlendedReceipt): string | null {
   const receipt = extractReceipt(subject);
-  return isRecord(receipt.x402) && typeof receipt.x402.verb === "string" ? receipt.x402.verb : null;
+  return getReceiptVerb(receipt);
 }
 
 export function normalizeCommandResponse<T = unknown>(payload: unknown): CommandResponse<T> {
@@ -349,6 +354,7 @@ export async function verifyReceipt(receiptLike: CanonicalReceipt | CommandRespo
     const { hash_sha256: recomputedHash } = recomputeReceiptHashSha256(receipt);
     const hashMatches = claimedHash === recomputedHash;
     const receiptId = typeof receipt.metadata?.receipt_id === "string" ? receipt.metadata.receipt_id : null;
+    const receiptIdPresent = typeof receipt.metadata?.receipt_id === "string";
     const receiptIdMatches = !receiptId || !claimedHash ? true : receiptId === claimedHash;
 
     let pubkey: Uint8Array | null = null;
@@ -396,7 +402,7 @@ export async function verifyReceipt(receiptLike: CanonicalReceipt | CommandRespo
       },
       values: {
         verb: getReceiptVerb(receipt),
-        signer_id,
+        signer_id: signerId,
         alg,
         canonical,
         claimed_hash: claimedHash,

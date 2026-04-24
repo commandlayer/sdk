@@ -199,6 +199,7 @@ def verify_receipt(receipt: CanonicalReceipt | CommandResponse, public_key: str 
         metadata = target.get("metadata") if isinstance(target, dict) else None
         receipt_id_value = metadata.get("receipt_id") if isinstance(metadata, dict) else None
         receipt_id = receipt_id_value if isinstance(receipt_id_value, str) else None
+        receipt_id_present = receipt_id is not None
         receipt_id_matches = not receipt_id or not claimed_hash or receipt_id == claimed_hash
 
         pubkey: bytes | None = None
@@ -239,10 +240,11 @@ def verify_receipt(receipt: CanonicalReceipt | CommandResponse, public_key: str 
                 signature_error = str(err)
 
         return {
-            "ok": alg_matches and canonical_matches and hash_matches and receipt_id_matches and signature_valid,
+            "ok": alg_matches and canonical_matches and hash_matches and signature_valid,
             "checks": {
                 "hash_matches": hash_matches,
                 "signature_valid": signature_valid,
+                "receipt_id_present": receipt_id_present,
                 "receipt_id_matches": receipt_id_matches,
                 "alg_matches": alg_matches,
                 "canonical_matches": canonical_matches,
@@ -272,6 +274,7 @@ def verify_receipt(receipt: CanonicalReceipt | CommandResponse, public_key: str 
             "checks": {
                 "hash_matches": False,
                 "signature_valid": False,
+                "receipt_id_present": isinstance(metadata, dict) and isinstance(metadata.get("receipt_id"), str),
                 "receipt_id_matches": False,
                 "alg_matches": False,
                 "canonical_matches": False,

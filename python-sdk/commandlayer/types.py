@@ -62,6 +62,7 @@ class VerifyOptions(TypedDict, total=False):
 class VerifyChecks(TypedDict):
     hash_matches: bool
     signature_valid: bool
+    receipt_id_present: bool
     receipt_id_matches: bool
     alg_matches: bool
     canonical_matches: bool
