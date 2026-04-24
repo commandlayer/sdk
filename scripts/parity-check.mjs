@@ -27,11 +27,18 @@ function normalize(value) {
 }
 
 function comparableVector(vector) {
+  const checks = vector.checks ?? {};
   return normalize({
     name: vector.name,
     expected_ok: vector.expected_ok,
-    ok: vector.ok,
-    checks: vector.checks,
+    semantic_ok: checks.alg_matches && checks.canonical_matches && checks.hash_matches && checks.signature_valid,
+    checks: {
+      alg_matches: checks.alg_matches,
+      canonical_matches: checks.canonical_matches,
+      hash_matches: checks.hash_matches,
+      receipt_id_matches: checks.receipt_id_matches,
+      signature_valid: checks.signature_valid
+    },
     errors: vector.errors,
     values: vector.values,
     recomputed_hash: vector.recomputed_hash
@@ -61,7 +68,7 @@ for (const vector of manifest.verification_vectors) {
   const pyVector = pyReport.vector_results.find((entry) => entry.name === vector.name);
   const tsComparable = comparableVector(tsVector);
   const pyComparable = comparableVector(pyVector);
-  const matchesExpectation = tsVector.ok === vector.expected_ok && pyVector.ok === vector.expected_ok;
+  const matchesExpectation = tsComparable.semantic_ok === vector.expected_ok && pyComparable.semantic_ok === vector.expected_ok;
   const matchesEachOther = JSON.stringify(tsComparable) === JSON.stringify(pyComparable);
   const status = matchesExpectation && matchesEachOther ? "PASS" : "FAIL";
   console.log(`- ${status} ${vector.name}`);
