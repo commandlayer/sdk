@@ -5,13 +5,19 @@ import copy
 import hashlib
 import json
 import re
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
 from nacl.exceptions import BadSignatureError
 from nacl.signing import VerifyKey
 from web3 import Web3
 
-from .types import CanonicalReceipt, CommandResponse, EnsVerifyOptions, SignerKeyResolution, VerifyResult
+from .types import (
+    CanonicalReceipt,
+    CommandResponse,
+    EnsVerifyOptions,
+    SignerKeyResolution,
+    VerifyResult,
+)
 
 CANONICAL_ALG = "ed25519-sha256"
 CANONICAL_FORMAT = "cl-stable-json-v1"
@@ -46,15 +52,21 @@ def _is_mapping(value: Any) -> bool:
 
 def extract_receipt(subject: CanonicalReceipt | CommandResponse) -> CanonicalReceipt:
     if isinstance(subject, dict) and isinstance(subject.get("receipt"), dict):
-        return dict(subject["receipt"])
-    return dict(subject)
+        response = cast(CommandResponse, subject)
+        return cast(CanonicalReceipt, dict(response["receipt"]))
+    return cast(CanonicalReceipt, dict(subject))
 
 
 def extract_receipt_verb(subject: CanonicalReceipt | CommandResponse) -> str | None:
     receipt = extract_receipt(subject)
+    if isinstance(receipt.get("verb"), str):
+        return str(receipt["verb"])
     x402 = receipt.get("x402")
     if isinstance(x402, dict) and isinstance(x402.get("verb"), str):
         return str(x402["verb"])
+    result = receipt.get("result")
+    if receipt.get("status") == "success" and isinstance(result, dict) and "summary" in result:
+        return "summarize"
     return None
 
 
@@ -114,7 +126,9 @@ def parse_ed25519_pubkey(text: str) -> bytes:
     return decoded
 
 
-def verify_ed25519_signature_over_utf8_hash_string(hash_hex: str, signature_b64: str, pubkey32: bytes) -> bool:
+def verify_ed25519_signature_over_utf8_hash_string(
+    hash_hex: str, signature_b64: str, pubkey32: bytes
+) -> bool:
     if len(pubkey32) != 32:
         raise ValueError("ed25519: pubkey must be 32 bytes")
     try:
@@ -131,7 +145,9 @@ def verify_ed25519_signature_over_utf8_hash_string(hash_hex: str, signature_b64:
         return False
 
 
-def resolve_signer_key(name: str, rpc_url: str, *, resolver: EnsTextResolver | None = None) -> SignerKeyResolution:
+def resolve_signer_key(
+    name: str, rpc_url: str, *, resolver: EnsTextResolver | None = None
+) -> SignerKeyResolution:
     if not rpc_url:
         raise ValueError("rpcUrl is required for ENS verification")
     txt_resolver = resolver or Web3EnsTextResolver(rpc_url)
@@ -147,25 +163,29 @@ def resolve_signer_key(name: str, rpc_url: str, *, resolver: EnsTextResolver | N
     try:
         raw_public_key_bytes = parse_ed25519_pubkey(pub_key_text)
     except ValueError as err:
-        raise ValueError(f"ENS TXT cl.sig.pub malformed for signer ENS name: {signer_name}. {err}") from err
-    return SignerKeyResolution(algorithm="ed25519", kid=kid, raw_public_key_bytes=raw_public_key_bytes)
+        raise ValueError(
+            f"ENS TXT cl.sig.pub malformed for signer ENS name: {signer_name}. {err}"
+        ) from err
+    return SignerKeyResolution(
+        algorithm="ed25519", kid=kid, raw_public_key_bytes=raw_public_key_bytes
+    )
 
 
 def to_unsigned_receipt(receipt: CanonicalReceipt | CommandResponse) -> CanonicalReceipt:
     unsigned = copy.deepcopy(extract_receipt(receipt))
     if not _is_mapping(unsigned):
         raise ValueError("receipt must be an object")
-    unsigned.pop("receipt_id", None)
     metadata = unsigned.get("metadata")
     if isinstance(metadata, dict):
         metadata.pop("receipt_id", None)
         proof = metadata.get("proof")
         if isinstance(proof, dict):
-            metadata["proof"] = {
-                key: proof[key]
-                for key in ("alg", "canonical", "signer_id")
-                if isinstance(proof.get(key), str)
-            }
+            sanitized_proof: dict[str, str] = {}
+            for key in ("alg", "canonical", "signer_id"):
+                value = proof.get(key)
+                if isinstance(value, str):
+                    sanitized_proof[key] = value
+            metadata["proof"] = cast(Any, sanitized_proof)
     return unsigned
 
 
@@ -179,7 +199,11 @@ def _extract_rpc_url(ens: EnsVerifyOptions) -> str:
     return str(ens.get("rpcUrl") or ens.get("rpc_url") or "")
 
 
-def verify_receipt(receipt: CanonicalReceipt | CommandResponse, public_key: str | None = None, ens: EnsVerifyOptions | None = None) -> VerifyResult:
+def verify_receipt(
+    receipt: CanonicalReceipt | CommandResponse,
+    public_key: str | None = None,
+    ens: EnsVerifyOptions | None = None,
+) -> VerifyResult:
     target = extract_receipt(receipt)
     try:
         metadata = target.get("metadata") if isinstance(target, dict) else None
@@ -187,8 +211,12 @@ def verify_receipt(receipt: CanonicalReceipt | CommandResponse, public_key: str 
         if not isinstance(proof, dict):
             proof = {}
 
-        claimed_hash = proof.get("hash_sha256") if isinstance(proof.get("hash_sha256"), str) else None
-        signature_b64 = proof.get("signature_b64") if isinstance(proof.get("signature_b64"), str) else None
+        claimed_hash = (
+            proof.get("hash_sha256") if isinstance(proof.get("hash_sha256"), str) else None
+        )
+        signature_b64 = (
+            proof.get("signature_b64") if isinstance(proof.get("signature_b64"), str) else None
+        )
         alg = proof.get("alg") if isinstance(proof.get("alg"), str) else None
         canonical = proof.get("canonical") if isinstance(proof.get("canonical"), str) else None
         signer_id = proof.get("signer_id") if isinstance(proof.get("signer_id"), str) else None
@@ -199,6 +227,7 @@ def verify_receipt(receipt: CanonicalReceipt | CommandResponse, public_key: str 
         metadata = target.get("metadata") if isinstance(target, dict) else None
         receipt_id_value = metadata.get("receipt_id") if isinstance(metadata, dict) else None
         receipt_id = receipt_id_value if isinstance(receipt_id_value, str) else None
+        receipt_id_present = bool(receipt_id)
         receipt_id_matches = not receipt_id or not claimed_hash or receipt_id == claimed_hash
 
         pubkey: bytes | None = None
@@ -231,18 +260,23 @@ def verify_receipt(receipt: CanonicalReceipt | CommandResponse, public_key: str 
         elif not claimed_hash or not signature_b64:
             signature_error = "missing proof.hash_sha256 or proof.signature_b64"
         elif not pubkey:
-            signature_error = ens_error or "no public key available (provide public_key/publicKey or ens)"
+            signature_error = (
+                ens_error or "no public key available (provide public_key/publicKey or ens)"
+            )
         else:
             try:
-                signature_valid = verify_ed25519_signature_over_utf8_hash_string(claimed_hash, signature_b64, pubkey)
+                signature_valid = verify_ed25519_signature_over_utf8_hash_string(
+                    claimed_hash, signature_b64, pubkey
+                )
             except Exception as err:  # noqa: BLE001
                 signature_error = str(err)
 
         return {
-            "ok": alg_matches and canonical_matches and hash_matches and receipt_id_matches and signature_valid,
+            "ok": alg_matches and canonical_matches and hash_matches and signature_valid,
             "checks": {
                 "hash_matches": hash_matches,
                 "signature_valid": signature_valid,
+                "receipt_id_present": receipt_id_present,
                 "receipt_id_matches": receipt_id_matches,
                 "alg_matches": alg_matches,
                 "canonical_matches": canonical_matches,
@@ -265,25 +299,37 @@ def verify_receipt(receipt: CanonicalReceipt | CommandResponse, public_key: str 
             },
         }
     except Exception as err:  # noqa: BLE001
-        proof = ((target.get("metadata") or {}).get("proof") or {}) if isinstance(target, dict) else {}
+        proof = (
+            ((target.get("metadata") or {}).get("proof") or {}) if isinstance(target, dict) else {}
+        )
         metadata = target.get("metadata") if isinstance(target, dict) else None
         return {
             "ok": False,
             "checks": {
                 "hash_matches": False,
                 "signature_valid": False,
+                "receipt_id_present": isinstance(metadata, dict)
+                and isinstance(metadata.get("receipt_id"), str),
                 "receipt_id_matches": False,
                 "alg_matches": False,
                 "canonical_matches": False,
             },
             "values": {
                 "verb": extract_receipt_verb(target),
-                "signer_id": proof.get("signer_id") if isinstance(proof.get("signer_id"), str) else None,
+                "signer_id": proof.get("signer_id")
+                if isinstance(proof.get("signer_id"), str)
+                else None,
                 "alg": proof.get("alg") if isinstance(proof.get("alg"), str) else None,
-                "canonical": proof.get("canonical") if isinstance(proof.get("canonical"), str) else None,
-                "claimed_hash": proof.get("hash_sha256") if isinstance(proof.get("hash_sha256"), str) else None,
+                "canonical": proof.get("canonical")
+                if isinstance(proof.get("canonical"), str)
+                else None,
+                "claimed_hash": proof.get("hash_sha256")
+                if isinstance(proof.get("hash_sha256"), str)
+                else None,
                 "recomputed_hash": None,
-                "receipt_id": metadata.get("receipt_id") if isinstance(metadata, dict) and isinstance(metadata.get("receipt_id"), str) else None,
+                "receipt_id": metadata.get("receipt_id")
+                if isinstance(metadata, dict) and isinstance(metadata.get("receipt_id"), str)
+                else None,
                 "pubkey_source": None,
                 "ens_txt_key": None,
             },

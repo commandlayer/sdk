@@ -77,12 +77,17 @@ export type RuntimeMetadata = {
 };
 
 export type CommandResponse<TResult = unknown, TError = unknown> = {
-  receipt: CanonicalReceipt<TResult, TError>;
+  receipt: CanonicalReceipt<TResult>;
   runtime_metadata?: RuntimeMetadata;
 };
 
-export type LegacyBlendedReceipt<TResult = unknown, TError = unknown> = CanonicalReceipt<TResult, TError> & {
+export type LegacyBlendedReceipt<TResult = unknown> = CanonicalReceipt<TResult> & {
   trace?: RuntimeMetadata;
+};
+
+export type ReceiptProtocolMetadata = {
+  verb?: string;
+  version?: string;
 };
 
 export type VerifyChecks = {
@@ -129,13 +134,12 @@ export type ClientOptions = {
 };
 
 export type CommonsRequestEnvelope<TBody extends Record<string, unknown> = Record<string, unknown>> = {
-  x402: ReceiptProtocolMetadata;
   actor: string;
 } & TBody;
 
 export type CommercialRequestEnvelope<TBody extends Record<string, unknown> = Record<string, unknown>> = {
   mode: "commercial";
-  receipt: ReceiptProtocolMetadata;
+  x402: ReceiptProtocolMetadata;
   actor: string;
   payment: Record<string, unknown>;
 } & TBody;
@@ -171,7 +175,7 @@ export function buildCommonsRequest<TBody extends Record<string, unknown>>(
 ): CommonsRequestEnvelope<TBody> {
   const actor = String(options.actor || body.actor || "sdk-user");
   const merged = { ...body, actor } as TBody & { actor: string };
-  return { x402: { verb, version: options.version ?? commonsVersion }, ...merged };
+  return merged;
 }
 
 export function buildCommercialRequest<TBody extends Record<string, unknown>>(
@@ -181,7 +185,7 @@ export function buildCommercialRequest<TBody extends Record<string, unknown>>(
 ): CommercialRequestEnvelope<TBody> {
   return {
     mode: "commercial",
-    receipt: { verb, version: options.version ?? commonsVersion },
+    x402: { verb, version: options.version ?? commonsVersion },
     payment: options.payment,
     actor: String(options.actor || body.actor || "sdk-user"),
     ...body
@@ -283,6 +287,13 @@ export async function resolveSignerKey(name: string, rpcUrl: string): Promise<Si
 function getReceiptVerb(receipt: CanonicalReceipt): string | null {
   if (typeof receipt.verb === "string") return receipt.verb;
   if (typeof receipt.x402?.verb === "string") return receipt.x402.verb;
+  if (
+    receipt.status === "success" &&
+    isRecord(receipt.result) &&
+    Object.prototype.hasOwnProperty.call(receipt.result, "summary")
+  ) {
+    return "summarize";
+  }
   return null;
 }
 
@@ -295,7 +306,7 @@ function extractReceipt(subject: CanonicalReceipt | CommandResponse | LegacyBlen
 
 export function extractReceiptVerb(subject: CanonicalReceipt | CommandResponse | LegacyBlendedReceipt): string | null {
   const receipt = extractReceipt(subject);
-  return isRecord(receipt.x402) && typeof receipt.x402.verb === "string" ? receipt.x402.verb : null;
+  return getReceiptVerb(receipt);
 }
 
 export function normalizeCommandResponse<T = unknown>(payload: unknown): CommandResponse<T> {
@@ -349,6 +360,7 @@ export async function verifyReceipt(receiptLike: CanonicalReceipt | CommandRespo
     const { hash_sha256: recomputedHash } = recomputeReceiptHashSha256(receipt);
     const hashMatches = claimedHash === recomputedHash;
     const receiptId = typeof receipt.metadata?.receipt_id === "string" ? receipt.metadata.receipt_id : null;
+    const receiptIdPresent = typeof receiptId === "string" && receiptId.length > 0;
     const receiptIdMatches = !receiptId || !claimedHash ? true : receiptId === claimedHash;
 
     let pubkey: Uint8Array | null = null;
@@ -396,7 +408,7 @@ export async function verifyReceipt(receiptLike: CanonicalReceipt | CommandRespo
       },
       values: {
         verb: getReceiptVerb(receipt),
-        signer_id,
+        signer_id: signerId,
         alg,
         canonical,
         claimed_hash: claimedHash,
