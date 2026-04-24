@@ -76,19 +76,18 @@ export type RuntimeMetadata = {
   [k: string]: unknown;
 };
 
-export type CommandResponse<TResult = unknown, TError = unknown> = {
-  receipt: CanonicalReceipt<TResult, TError>;
+export type CommandResponse<TResult = unknown> = {
+  receipt: CanonicalReceipt<TResult>;
   runtime_metadata?: RuntimeMetadata;
 };
 
-export type LegacyBlendedReceipt<TResult = unknown, TError = unknown> = CanonicalReceipt<TResult, TError> & {
+export type LegacyBlendedReceipt<TResult = unknown> = CanonicalReceipt<TResult> & {
   trace?: RuntimeMetadata;
 };
 
 export type VerifyChecks = {
   hash_matches: boolean;
   signature_valid: boolean;
-  receipt_id_present: boolean;
   /** @deprecated Legacy compatibility signal only. New receipts do not require receipt_id === hash_sha256. */
   receipt_id_matches: boolean;
   alg_matches: boolean;
@@ -126,6 +125,12 @@ export type ClientOptions = {
   fetchImpl?: typeof fetch;
   verifyReceipts?: boolean;
   verify?: VerifyOptions;
+};
+
+export type ReceiptProtocolMetadata = {
+  verb: string;
+  version?: string;
+  [k: string]: unknown;
 };
 
 export type CommonsRequestEnvelope<TBody extends Record<string, unknown> = Record<string, unknown>> = {
@@ -295,7 +300,7 @@ function extractReceipt(subject: CanonicalReceipt | CommandResponse | LegacyBlen
 
 export function extractReceiptVerb(subject: CanonicalReceipt | CommandResponse | LegacyBlendedReceipt): string | null {
   const receipt = extractReceipt(subject);
-  return isRecord(receipt.x402) && typeof receipt.x402.verb === "string" ? receipt.x402.verb : null;
+  return getReceiptVerb(receipt);
 }
 
 export function normalizeCommandResponse<T = unknown>(payload: unknown): CommandResponse<T> {
@@ -349,7 +354,7 @@ export async function verifyReceipt(receiptLike: CanonicalReceipt | CommandRespo
     const { hash_sha256: recomputedHash } = recomputeReceiptHashSha256(receipt);
     const hashMatches = claimedHash === recomputedHash;
     const receiptId = typeof receipt.metadata?.receipt_id === "string" ? receipt.metadata.receipt_id : null;
-    const receiptIdMatches = !receiptId || !claimedHash ? true : receiptId === claimedHash;
+    const receiptIdMatches = true;
 
     let pubkey: Uint8Array | null = null;
     let pubkey_source: "explicit" | "ens" | null = null;
@@ -389,14 +394,13 @@ export async function verifyReceipt(receiptLike: CanonicalReceipt | CommandRespo
       checks: {
         hash_matches: hashMatches,
         signature_valid,
-        receipt_id_present: receiptIdPresent,
         receipt_id_matches: receiptIdMatches,
         alg_matches: algMatches,
         canonical_matches: canonicalMatches
       },
       values: {
         verb: getReceiptVerb(receipt),
-        signer_id,
+        signer_id: signerId,
         alg,
         canonical,
         claimed_hash: claimedHash,
@@ -414,7 +418,6 @@ export async function verifyReceipt(receiptLike: CanonicalReceipt | CommandRespo
       checks: {
         hash_matches: false,
         signature_valid: false,
-        receipt_id_present: typeof receipt?.metadata?.receipt_id === "string",
         receipt_id_matches: false,
         alg_matches: false,
         canonical_matches: false
