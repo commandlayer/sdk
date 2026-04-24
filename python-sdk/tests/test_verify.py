@@ -6,6 +6,7 @@ import pytest
 from nacl.signing import SigningKey
 
 from commandlayer.verify import (
+    extract_receipt_verb,
     parse_ed25519_pubkey,
     recompute_receipt_hash_sha256,
     resolve_signer_key,
@@ -111,3 +112,8 @@ def test_verify_receipt_rejects_tampered_receipt() -> None:
     out = verify_receipt(receipt, public_key=f"ed25519:{pub_b64}")
     assert out["ok"] is False
     assert out["checks"]["hash_matches"] is False
+
+
+def test_extract_receipt_verb_falls_back_to_summarize_for_legacy_fixture() -> None:
+    legacy_receipt = {"status": "success", "result": {"summary": "legacy"}}
+    assert extract_receipt_verb(legacy_receipt) == "summarize"

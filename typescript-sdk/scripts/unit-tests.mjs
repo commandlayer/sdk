@@ -198,6 +198,7 @@ await assertRejects(
 
 const receipt = {
   status: "success",
+  verb: "summarize",
   result: { summary: "test" },
   metadata: {
     proof: {
@@ -236,7 +237,7 @@ const builtRequest = buildCommonsRequest(
   { input: { content: "hello" }, limits: { max_output_tokens: 10 } },
   { actor: "sdk-test" }
 );
-assert(builtRequest.x402.verb === "summarize", "buildCommonsRequest sets canonical verb metadata");
+assert(!("x402" in builtRequest), "buildCommonsRequest omits x402 metadata");
 assert(builtRequest.actor === "sdk-test", "buildCommonsRequest sets actor");
 
 // Tampered receipt

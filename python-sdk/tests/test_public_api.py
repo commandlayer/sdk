@@ -8,6 +8,7 @@ import httpx
 
 from commandlayer import (
     CommandLayerClient,
+    build_commercial_request,
     build_commons_request,
     canonicalize_stable_json_v1,
     create_client,
@@ -56,7 +57,6 @@ def test_expected_symbols_are_importable() -> None:
         assert export_value is not None, export_name
 
 
-
 def test_create_client_accepts_basic_configuration() -> None:
     client = create_client(
         actor="api-user",
@@ -74,7 +74,6 @@ def test_create_client_accepts_basic_configuration() -> None:
     client.close()
 
 
-
 def test_public_client_verbs_exist_and_are_callable() -> None:
     client = create_client(actor="verb-check")
     try:
@@ -83,7 +82,6 @@ def test_public_client_verbs_exist_and_are_callable() -> None:
             assert callable(method), verb
     finally:
         client.close()
-
 
 
 def test_mocked_client_response_matches_public_envelope_shape() -> None:
@@ -120,7 +118,6 @@ def test_mocked_client_response_matches_public_envelope_shape() -> None:
     assert response["runtime_metadata"]["duration_ms"] == 7
 
 
-
 def test_verify_receipt_is_importable_callable_and_matches_vector_contract() -> None:
     receipt = load_fixture("receipt_valid.json")
 
@@ -128,9 +125,9 @@ def test_verify_receipt_is_importable_callable_and_matches_vector_contract() -> 
 
     assert callable(verify_receipt)
     assert result["ok"] is True
-    assert result["values"]["recomputed_hash"] == recompute_receipt_hash_sha256(
-        receipt
-    )["hash_sha256"]
+    assert (
+        result["values"]["recomputed_hash"] == recompute_receipt_hash_sha256(receipt)["hash_sha256"]
+    )
     assert result["values"]["signer_id"] == "runtime.commandlayer.eth"
     assert result["errors"]["verify_error"] is None
 
@@ -142,10 +139,20 @@ def test_build_commons_request_and_extract_receipt_verb_follow_current_contract(
         actor="shape-check",
     )
 
-    assert payload["x402"] == {"verb": "summarize", "version": "1.1.0"}
+    assert "x402" not in payload
     assert payload["actor"] == "shape-check"
-    assert extract_receipt_verb(load_fixture("receipt_valid.json")) == "summarize"
+    assert extract_receipt_verb(load_fixture("receipt_valid.json")) is None
+    assert (
+        extract_receipt_verb({"status": "success", "result": {"summary": "legacy"}}) == "summarize"
+    )
 
+    commercial = build_commercial_request(
+        "summarize",
+        {"input": {"content": "Hello"}},
+        actor="shape-check",
+        payment={"scheme": "x402", "quote_id": "quote_123"},
+    )
+    assert commercial["x402"] == {"verb": "summarize", "version": "1.1.0"}
 
 
 def test_mocked_end_to_end_flow_uses_vector_shaped_response() -> None:
