@@ -75,7 +75,9 @@ def test_parse_uses_current_schema_field() -> None:
 
     def handler(request: httpx.Request) -> httpx.Response:
         captured["json"] = json.loads(request.content.decode("utf-8"))
-        return httpx.Response(200, json={"receipt": {"status": "success", "metadata": {"proof": {}}}})
+        return httpx.Response(
+            200, json={"receipt": {"status": "success", "metadata": {"proof": {}}}}
+        )
 
     client = CommandLayerClient(
         runtime="https://runtime.commandlayer.org",

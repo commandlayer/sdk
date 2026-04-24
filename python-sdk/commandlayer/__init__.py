@@ -19,8 +19,8 @@ from .types import (
 )
 from .verify import (
     canonicalize_stable_json_v1,
-    parse_ed25519_pubkey,
     extract_receipt_verb,
+    parse_ed25519_pubkey,
     recompute_receipt_hash_sha256,
     resolve_signer_key,
     sha256_hex_utf8,
