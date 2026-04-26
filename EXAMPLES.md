@@ -13,6 +13,7 @@ All examples in this file target:
 {
   "receipt": {
     "status": "success",
+    "verb": "summarize",
     "result": {
       "summary": "..."
     },

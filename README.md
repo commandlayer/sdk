@@ -29,11 +29,11 @@ console.log(result.valid);
 
 ## What this repo now treats as canonical
 
-- **Requests**: Commons requests are built around one explicit envelope: top-level `x402.verb`, `x402.version`, `actor`, and the verb body.
+- **Requests**: Commons requests are built with an explicit verb + payload envelope, and receipts surface that canonical verb at top-level `receipt.verb`.
 - **Responses**: the signed artifact is always `response.receipt`.
 - **Unsigned runtime context**: optional execution details live in `response.runtime_metadata`.
-- **Verification**: verification recomputes the receipt hash from the unsigned receipt, checks `metadata.receipt_id === metadata.proof.hash_sha256`, then verifies the Ed25519 signature over the UTF-8 hash string.
-- **Verb semantics**: the verb is read from `receipt.x402.verb`.
+- **Verification**: verification recomputes the receipt hash from the unsigned receipt, checks it against `metadata.proof.hash_sha256`, and verifies the Ed25519 signature over the UTF-8 hash string. `metadata.receipt_id` is optional compatibility metadata; when present it should match the proof hash.
+- **Verb semantics**: the canonical verb is read from `receipt.verb`; `receipt.x402.verb` is legacy / commercial fallback only.
 
 This repo no longer presents legacy blended envelopes as the primary contract. Legacy normalization remains only to accept older runtime responses that inlined `trace` beside the receipt.
 
@@ -84,10 +84,7 @@ pip install commandlayer
 {
   "receipt": {
     "status": "success",
-    "x402": {
-      "verb": "summarize",
-      "version": "1.1.0"
-    },
+    "verb": "summarize",
     "result": {
       "summary": "..."
     },
@@ -97,7 +94,7 @@ pip install commandlayer
         "alg": "ed25519-sha256",
         "canonical": "cl-stable-json-v1",
         "signer_id": "runtime.commandlayer.eth",
-        "hash_sha256": "same-value-as-receipt_id",
+        "hash_sha256": "sha256-of-unsigned-receipt",
         "signature_b64": "..."
       }
     }
@@ -160,6 +157,7 @@ Client methods now return a command response envelope:
 {
   "receipt": {
     "status": "success",
+    "verb": "summarize",
     "result": {
       "summary": "..."
     },
@@ -207,8 +205,9 @@ Verification reads exactly the current receipt contract:
 2. remove `metadata.receipt_id` and the signed hash/signature fields,
 3. canonicalize with `cl-stable-json-v1`,
 4. recompute `sha256`,
-5. require `metadata.receipt_id === metadata.proof.hash_sha256`,
-6. verify the Ed25519 signature.
+5. compare the recomputed hash to `metadata.proof.hash_sha256`,
+6. if `metadata.receipt_id` is present, treat equality to the proof hash as a compatibility / diagnostic check,
+7. verify the Ed25519 signature.
 
 ## Legacy handling retained
 

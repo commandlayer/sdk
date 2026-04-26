@@ -47,6 +47,7 @@ Both SDKs return the same shape:
 {
   "receipt": {
     "status": "success",
+    "verb": "summarize",
     "result": { "summary": "..." },
     "metadata": {
       "proof": {
@@ -86,4 +87,4 @@ verify_receipt(response["receipt"], public_key="ed25519:BASE64_PUBLIC_KEY")
 - Persist `response.receipt`.
 - Treat `response.runtime_metadata` as optional unsigned context.
 - Treat `receipt.metadata.receipt_id` as the receipt hash identifier.
-- Read the verb from `receipt.x402.verb`.
+- Read the verb from `receipt.verb`. Legacy/commercial payloads may expose `receipt.x402.verb` as a fallback.
