@@ -6,8 +6,9 @@ Current-line TypeScript SDK for the CommandLayer Commons receipt contract (`1.1.
 
 - `response.receipt` is the signed receipt.
 - `response.runtime_metadata` is optional unsigned execution context.
-- `receipt.metadata.receipt_id` is the receipt hash identifier and must match `receipt.metadata.proof.hash_sha256`.
-- The verb lives at `receipt.x402.verb`.
+- `receipt.metadata.proof.hash_sha256` is the signed/recomputed receipt proof hash.
+- The canonical verb lives at `receipt.verb`; `receipt.x402.verb` is legacy / commercial fallback only.
+- `receipt.metadata.receipt_id`, when present, should match the proof hash but is not required for verification `ok`.
 
 ## Install
 
@@ -44,6 +45,7 @@ Client methods return:
 {
   "receipt": {
     "status": "success",
+    "verb": "summarize",
     "result": {},
     "metadata": {
       "proof": {
@@ -117,5 +119,5 @@ npm run test:integration
 - `receipt.verb` is the canonical verb field returned by the runtime.
 - `receipt.metadata.receipt_id` is an identifier for the receipt instance.
 - `receipt.metadata.proof.hash_sha256` is the SHA-256 hash over the unsigned canonical receipt payload.
-- `verifyReceipt()` succeeds when the declared algorithm/canonicalization match, the recomputed payload hash matches `hash_sha256`, and the Ed25519 signature validates over that hash.
+- `verifyReceipt()` succeeds when the declared algorithm/canonicalization match, the recomputed payload hash matches `hash_sha256`, and the Ed25519 signature validates over that hash. Any `receipt_id_matches` output is compatibility/diagnostic metadata and is not required for `ok`.
 - Legacy receipts that still place the verb under `receipt.x402.verb` continue to parse, but that path is fallback-only.

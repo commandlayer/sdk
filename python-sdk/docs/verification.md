@@ -8,8 +8,9 @@ The verification helper validates the current receipt contract directly.
 2. Remove `metadata.receipt_id` and the signed hash/signature fields.
 3. Canonicalize with `cl-stable-json-v1`.
 4. Recompute `sha256`.
-5. Require `metadata.receipt_id == metadata.proof.hash_sha256`.
-6. Verify the Ed25519 signature over the UTF-8 hash string.
+5. Compare the recomputed hash to `metadata.proof.hash_sha256`.
+6. If `metadata.receipt_id` is present, treat equality to the proof hash as a compatibility / diagnostic check (not a hard requirement for `ok`).
+7. Verify the Ed25519 signature over the UTF-8 hash string.
 
 ## Helpers
 
