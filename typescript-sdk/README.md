@@ -1,14 +1,19 @@
 # CommandLayer TypeScript SDK
 
-Current-line TypeScript SDK for the CommandLayer Commons receipt contract (`1.1.0`).
+Current-line TypeScript SDK for reusable CommandLayer receipt flows.
 
-## What is canonical
+## Scope
 
-- `response.receipt` is the signed receipt.
-- `response.runtime_metadata` is optional unsigned execution context.
-- `receipt.metadata.proof.hash_sha256` is the signed/recomputed receipt proof hash.
-- The canonical verb lives at `receipt.verb`; `receipt.x402.verb` is legacy / commercial fallback only.
-- `receipt.metadata.receipt_id`, when present, should match the proof hash but is not required for verification `ok`.
+This package is SDK-only and focuses on:
+- receipt generation helpers,
+- canonicalization,
+- SHA-256 hashing,
+- Ed25519 signing + verification,
+- ENS key-resolution helpers,
+- agent-wrapping utilities.
+
+For public paste-and-verify receipt verification, use VerifyAgent:
+https://github.com/commandlayer/verifyagent
 
 ## Install
 
@@ -27,75 +32,13 @@ const response = await client.summarize({
   style: "bullet_points"
 });
 
-console.log(response.receipt.result?.summary);
-console.log(response.runtime_metadata?.duration_ms);
-
 const verification = await verifyReceipt(response.receipt, {
   publicKey: "ed25519:BASE64_PUBLIC_KEY"
 });
 
+console.log(response.receipt.result?.summary);
 console.log(verification.ok);
 ```
-
-## Return shape
-
-Client methods return:
-
-```json
-{
-  "receipt": {
-    "status": "success",
-    "verb": "summarize",
-    "result": {},
-    "metadata": {
-      "proof": {
-        "alg": "ed25519-sha256",
-        "canonical": "cl-stable-json-v1",
-        "signer_id": "runtime.commandlayer.eth",
-        "hash_sha256": "...",
-        "signature_b64": "..."
-      }
-    }
-  },
-  "runtime_metadata": {
-    "trace_id": "trace_123",
-    "duration_ms": 118,
-    "provider": "runtime.commandlayer.org"
-  }
-}
-```
-
-`verifyReceipt()` accepts the canonical `receipt` object. The SDK also accepts a whole response envelope for legacy compatibility, but new integrations should pass `response.receipt` explicitly. Any `receipt.x402` block should be treated as legacy / commercial-only metadata rather than part of the Commons contract.
-
-## Verification modes
-
-### Offline
-
-```ts
-const result = await verifyReceipt(response.receipt, {
-  publicKey: "ed25519:BASE64_PUBLIC_KEY"
-});
-```
-
-### ENS-backed
-
-```ts
-import { buildCommonsRequest, buildCommercialRequest } from "@commandlayer/sdk";
-
-const commons = buildCommonsRequest("summarize", {
-  input: { content: "hello", summary_style: "bullet_points" },
-  limits: { max_output_tokens: 400 }
-}, { actor: "docs-example" });
-
-const commercial = buildCommercialRequest("summarize", {
-  input: { content: "hello" }
-}, {
-  actor: "docs-example",
-  payment: { scheme: "x402", quote_id: "quote_123" }
-});
-```
-
-The commercial builder is isolated on purpose; this package's first-class runtime client remains Commons-first.
 
 ## Verification helpers
 
@@ -104,20 +47,14 @@ The commercial builder is isolated on purpose; this package's first-class runtim
 - `extractReceiptVerb(receiptOrResponse)`
 - `recomputeReceiptHashSha256(receiptOrResponse)`
 
-## Legacy support
+## Contract semantics
 
-```bash
-cd typescript-sdk
-npm ci
-npm run typecheck
-npm test
-npm run test:integration
-```
+- `response.receipt` is the signed canonical artifact.
+- `response.runtime_metadata` is optional unsigned context.
+- Verification recomputes the canonical SHA-256 hash and validates Ed25519 signature proof.
+- `receipt.metadata.receipt_id` is compatibility metadata when present.
 
-## Receipt verification semantics
+## Boundary notes
 
-- `receipt.verb` is the canonical verb field returned by the runtime.
-- `receipt.metadata.receipt_id` is an identifier for the receipt instance.
-- `receipt.metadata.proof.hash_sha256` is the SHA-256 hash over the unsigned canonical receipt payload.
-- `verifyReceipt()` succeeds when the declared algorithm/canonicalization match, the recomputed payload hash matches `hash_sha256`, and the Ed25519 signature validates over that hash. Any `receipt_id_matches` output is compatibility/diagnostic metadata and is not required for `ok`.
-- Legacy receipts that still place the verb under `receipt.x402.verb` continue to parse, but that path is fallback-only.
+- VerifyAgent is external and not part of this package/repository runtime surface.
+- Commercial hosted runtime, x402, and indexing/dashboard product surfaces are outside the SDK package scope.
