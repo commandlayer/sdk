@@ -1,6 +1,9 @@
 # Verification
 
-The verification helper validates the current receipt contract directly.
+The SDK verification helper validates the current receipt contract directly.
+
+For public paste-and-verify receipt verification, use VerifyAgent:
+https://github.com/commandlayer/verifyagent
 
 ## Rules
 

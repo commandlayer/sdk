@@ -6,6 +6,17 @@
 pip install commandlayer
 ```
 
+## Developer flow
+
+1. Install SDK
+2. Wrap agent execution
+3. Generate signed CommandLayer receipt
+4. Verify locally with SDK or publicly with VerifyAgent
+5. Upgrade to Commercial API for hosted/high-volume verification
+
+For public paste-and-verify receipt verification, use VerifyAgent:
+https://github.com/commandlayer/verifyagent
+
 ## First request
 
 ```python

@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased]
+
+- Separated VerifyAgent into its own public Commons/MIT repository. The SDK now focuses on receipt generation, canonicalization, hashing, signing, verification, ENS helpers, and agent-wrapping utilities. Public paste-and-verify UI is handled externally by VerifyAgent.
+
+For public paste-and-verify receipt verification, use VerifyAgent:
+https://github.com/commandlayer/verifyagent
+
 ## [1.1.0] - 2026-03-19
 
 CommandLayer SDKs now align on the Commons-first Protocol-Commons v1.1.0 surface. This release replaces the mixed 1.0.0-era documentation and response assumptions with a single canonical receipt model shared by the TypeScript SDK, Python SDK, fixtures, and verification flow.

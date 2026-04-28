@@ -25,6 +25,13 @@ Every verb method returns:
 
 `receipt` is the canonical signed payload. `runtime_metadata` is execution context and is not part of the signed receipt hash.
 
+## Boundaries
+
+This SDK is programmatic tooling only. It does not include a public verifier UI.
+
+For public paste-and-verify receipt verification, use VerifyAgent:
+https://github.com/commandlayer/verifyagent
+
 ## Verbs
 
 - `summarize`
@@ -37,8 +44,6 @@ Every verb method returns:
 - `format`
 - `parse`
 - `fetch`
-
-`parse()` accepts the current-line `schema` field for schema-guided parsing. The legacy `target_schema` argument is still accepted as a compatibility alias, but new integrations should prefer `schema`.
 
 ## Generic invoke
 
